@@ -52,13 +52,14 @@ El proyecto está organizado de la siguiente manera:
 *   **No Instalar Dependencias**: Recuerda la restricción de no instalar dependencias (`npm install`). Solo debes modificar el `package.json` si se requiere añadir o cambiar una dependencia, pero no ejecutar la instalación.
 *   **Pruebas**: Dado que no se pueden instalar dependencias, las pruebas unitarias o de integración que dependan de estos módulos no se podrán ejecutar directamente en este entorno. El desarrollo debe enfocarse en la correcta implementación lógica.
 *   **Variables de Entorno**:
-    *   El proyecto ahora utiliza un archivo `.env.example` como plantilla para las variables de entorno. Los valores reales deben colocarse en un archivo `.env`.
+    *   El proyecto ahora utiliza la librería `dotenv` para cargar automáticamente las variables de entorno desde un archivo `.env` ubicado en la raíz del proyecto.
+    *   Se proporciona un archivo `.env.example` como plantilla. Los desarrolladores deben copiar este archivo a `.env` y ajustar los valores para su entorno local. `dotenv` ha sido añadido como una dependencia en `package.json`.
     *   Variables clave incluyen `ENABLE_API` y `ENABLE_ARI` para activar/desactivar los respectivos módulos.
     *   Otras variables configuran la conexión a Redis (`REDIS_HOST`, `REDIS_PORT`, etc.) y Asterisk ARI (`ARI_URL`, `ARI_APP_NAME`, etc.).
-    *   Consulta `.env.example` para la lista completa y `src/index.js` para ver cómo se utilizan `ENABLE_API` y `ENABLE_ARI`.
+    *   Consulta `.env.example` para la lista completa. `src/index.js` carga estas variables al inicio.
 *   **Manejo de Sesiones**: Las sesiones de la FSM se identifican por un `sessionId` y se persisten en Redis. El `sessionId` es proporcionado en la URL para la API y es el ID del canal para ARI.
 
-## Cómo (teóricamente) Ejecutar
+## Cómo Ejecutar (con `.env`)
 
 Si las dependencias estuvieran instaladas, la aplicación se ejecutaría con:
 

@@ -1,9 +1,13 @@
+require('dotenv').config(); // Cargar variables de entorno desde .env al inicio
+
 const { startApiServer } = require('./apiServer');
 const redisClient = require('./redisClient');
 const { connectAri, closeAri } = require('./ariClient');
 const { loadStateConfig } = require('./configLoader');
 
 async function main() {
+  console.log(`Valor de process.env.ENABLE_API: ${process.env.ENABLE_API}`);
+  console.log(`Valor de process.env.ENABLE_ARI: ${process.env.ENABLE_ARI}`);
   let ariConnected = false;
   try {
     // 1. Cargar configuración de la FSM (ya se hace en apiServer y ariClient al iniciar, pero podemos asegurar aquí)

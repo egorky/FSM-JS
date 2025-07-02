@@ -46,14 +46,16 @@ Cuando una interacción ocurre (ya sea una solicitud API o un evento en una llam
     *   Entrada FSM: `intent: "request_human_agent"`, `parameters: { ... }`.
     *   Respuesta FSM: `nextStateId: "99_transfer_to_human"`, `parametersToCollect: {}`, `apiHooks: { onEnterState: ["api_initiate_transfer_to_human_agent", ... ] }`.
 
-## Configuración y Ejecución (Teórica)
+## Configuración y Ejecución
 
-*   **Dependencias**: `express`, `ioredis`, `ari-client` (listadas en `package.json`).
+*   **Dependencias**: `express`, `ioredis`, `ari-client`, `dotenv` (listadas en `package.json`).
 *   **Configuración de Estados**: Definida en `config/states.json`.
 *   **Servicios Externos**: Requiere una instancia de Redis accesible. Si se usa ARI (y `ENABLE_ARI="true"`), un servidor Asterisk configurado para ARI.
-*   **Archivo `.env.example`**: Se proporciona un archivo `.env.example` con todas las variables de entorno configurables. Se recomienda copiarlo a `.env` y ajustar los valores.
-*   **Variables de Entorno Clave**:
-    *   `ENABLE_API`: Controla si se inicia el servidor API (`true` por defecto).
+*   **Variables de Entorno**:
+    *   El proyecto utiliza la librería `dotenv` para cargar automáticamente variables de entorno desde un archivo `.env` ubicado en la raíz del proyecto.
+    *   Se proporciona un archivo `.env.example` como plantilla. Copie este archivo a `.env` y modifique los valores según su configuración local.
+    *   **Variables Clave en `.env`**:
+        *   `ENABLE_API`: Controla si se inicia el servidor API (`true` por defecto).
     *   `ENABLE_ARI`: Controla si se inicia la conexión ARI (`true` por defecto).
     *   `PORT`: Puerto para el servidor API (defecto: 3000, relevante si `ENABLE_API="true"`).
     *   `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`: Para la conexión a Redis.
