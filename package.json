@@ -21,7 +21,7 @@
   "dependencies": {
     "express": "^4.17.1",
     "ioredis": "^4.27.9",
-    "asterisk-ari-client": "^2.0.0"
+    "ari-client": "^2.2.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.12"

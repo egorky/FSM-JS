@@ -17,29 +17,39 @@ async function main() {
 
     // 3. Iniciar el servidor API
     // startApiServer ya maneja su propia carga de config y logging
-    startApiServer();
-    // No hay un 'await' aquí porque app.listen es asíncrono pero no devuelve una promesa
-    // que necesitemos esperar para continuar con ARI. El log de 'escuchando en puerto X'
-    // se manejará dentro de startApiServer.
+    const enableApi = process.env.ENABLE_API !== 'false'; // Habilitado por defecto
+    if (enableApi) {
+      startApiServer();
+      // No hay un 'await' aquí porque app.listen es asíncrono pero no devuelve una promesa
+      // que necesitemos esperar para continuar. El log de 'escuchando en puerto X'
+      // se manejará dentro de startApiServer.
+    } else {
+      console.log('Módulo API está deshabilitado por configuración (ENABLE_API=false).');
+    }
 
     // 4. Conectar al cliente ARI de Asterisk (si está habilitado o configurado)
-    // Podríamos tener una variable de entorno para habilitar/deshabilitar ARI
     const enableAri = process.env.ENABLE_ARI !== 'false'; // Habilitado por defecto
     if (enableAri) {
       console.log('Intentando conectar a Asterisk ARI...');
       await connectAri(); // connectAri maneja sus propios reintentos iniciales si falla
-      ariConnected = true;
-      console.log('Módulo ARI iniciado y conectado.');
+      ariConnected = true; // Marcar como conectado solo si se intentó y tuvo éxito (o está en proceso)
+      console.log('Módulo ARI iniciado (o intentando conectar).');
     } else {
-      console.log('Módulo ARI está deshabilitado por configuración.');
+      console.log('Módulo ARI está deshabilitado por configuración (ENABLE_ARI=false).');
     }
 
-    console.log('Aplicación FSM iniciada y lista.');
+    if (enableApi || enableAri) {
+      console.log('Aplicación FSM iniciada y lista (al menos un módulo está activo).');
+    } else {
+      console.warn('ADVERTENCIA: Tanto el módulo API como el ARI están deshabilitados. La aplicación no hará mucho.');
+      // Podríamos optar por salir si ningún módulo está activo, o dejarla corriendo "ociosa".
+      // Por ahora, la dejamos correr.
+    }
 
   } catch (error) {
     console.error('Error fatal durante la inicialización de la aplicación:', error);
     // Intentar cerrar conexiones abiertas antes de salir
-    if (ariConnected) {
+    if (ariConnected && process.env.ENABLE_ARI !== 'false') { // Solo cerrar si estaba habilitado e intentó conectar
       await closeAri().catch(err => console.error('Error al cerrar ARI durante el apagado por error:', err));
     }
     await redisClient.quit().catch(err => console.error('Error al cerrar Redis durante el apagado por error:', err));
@@ -54,9 +64,9 @@ async function shutdown(signal) {
   // Aquí no cerramos el servidor HTTP explícitamente con server.close()
   // porque no guardamos la instancia del servidor desde startApiServer.
   // Para un cierre más limpio, startApiServer debería devolver el servidor.
-  // Por ahora, las conexiones existentes podrían interrumpirse.
+  // Por ahora, las conexiones existentes podrían interrumpirse si la API estaba activa.
 
-  if (process.env.ENABLE_ARI !== 'false') {
+  if (process.env.ENABLE_ARI !== 'false') { // Solo intentar cerrar si estaba habilitado
       await closeAri().catch(err => console.error('Error al cerrar ARI:', err));
   }
   await redisClient.quit().catch(err => console.error('Error al cerrar Redis:', err));

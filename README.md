@@ -48,14 +48,16 @@ Cuando una interacción ocurre (ya sea una solicitud API o un evento en una llam
 
 ## Configuración y Ejecución (Teórica)
 
-*   **Dependencias**: `express`, `ioredis`, `asterisk-ari-client` (listadas en `package.json`).
+*   **Dependencias**: `express`, `ioredis`, `ari-client` (listadas en `package.json`).
 *   **Configuración de Estados**: Definida en `config/states.json`.
-*   **Servicios Externos**: Requiere una instancia de Redis accesible. Si se usa ARI, un servidor Asterisk configurado para ARI.
-*   **Variables de Entorno**:
-    *   `PORT`: Puerto para el servidor API (defecto: 3000).
+*   **Servicios Externos**: Requiere una instancia de Redis accesible. Si se usa ARI (y `ENABLE_ARI="true"`), un servidor Asterisk configurado para ARI.
+*   **Archivo `.env.example`**: Se proporciona un archivo `.env.example` con todas las variables de entorno configurables. Se recomienda copiarlo a `.env` y ajustar los valores.
+*   **Variables de Entorno Clave**:
+    *   `ENABLE_API`: Controla si se inicia el servidor API (`true` por defecto).
+    *   `ENABLE_ARI`: Controla si se inicia la conexión ARI (`true` por defecto).
+    *   `PORT`: Puerto para el servidor API (defecto: 3000, relevante si `ENABLE_API="true"`).
     *   `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`: Para la conexión a Redis.
-    *   `ENABLE_ARI`: `true` o `false` (defecto: `true`) para habilitar la conexión ARI.
-    *   `ARI_APP_NAME`, `ARI_USERNAME`, `ARI_PASSWORD`, `ARI_URL`: Para la conexión ARI.
+    *   `ARI_APP_NAME`, `ARI_USERNAME`, `ARI_PASSWORD`, `ARI_URL`: Para la conexión ARI (relevante si `ENABLE_ARI="true"`).
 
 Para ejecutar (asumiendo que las dependencias están instaladas y los servicios configurados):
 

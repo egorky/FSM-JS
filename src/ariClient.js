@@ -1,4 +1,4 @@
-const Ari = require('asterisk-ari-client');
+const Ari = require('ari-client');
 const fsm = require('./fsm');
 const { loadStateConfig } = require('./configLoader'); // Para asegurar que esté cargada
 

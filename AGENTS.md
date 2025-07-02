@@ -7,7 +7,7 @@ Este documento proporciona una guía para trabajar con el proyecto de Máquina d
 El proyecto está organizado de la siguiente manera:
 
 -   `package.json`: Define las dependencias del proyecto y los scripts principales.
-    -   **Importante**: Las dependencias listadas (`express`, `ioredis`, `asterisk-ari-client`) **no se instalan automáticamente** como parte de las tareas de este agente. Se asume que estarán disponibles en el entorno de ejecución final.
+    -   **Importante**: Las dependencias listadas (`express`, `ioredis`, `ari-client`) **no se instalan automáticamente** como parte de las tareas de este agente. Se asume que estarán disponibles en el entorno de ejecución final.
 -   `config/`: Contiene los archivos de configuración.
     -   `states.json`: Define la estructura de la máquina de estados. Cada estado incluye:
         -   `id`, `description`.
@@ -51,7 +51,11 @@ El proyecto está organizado de la siguiente manera:
 *   **Configuración de Estados (`config/states.json`)**: Cualquier cambio en la lógica de la conversación (nuevos estados, cambio en parámetros, estructura de `apiHooks`, etc.) debe realizarse en este archivo. Asegúrate de que la estructura del JSON sea válida, incluyendo el objeto `apiHooks` y sus arrays de APIs para cada hook.
 *   **No Instalar Dependencias**: Recuerda la restricción de no instalar dependencias (`npm install`). Solo debes modificar el `package.json` si se requiere añadir o cambiar una dependencia, pero no ejecutar la instalación.
 *   **Pruebas**: Dado que no se pueden instalar dependencias, las pruebas unitarias o de integración que dependan de estos módulos no se podrán ejecutar directamente en este entorno. El desarrollo debe enfocarse en la correcta implementación lógica.
-*   **Variables de Entorno**: Varios módulos (Redis, ARI, API server) utilizan variables de entorno para su configuración (ej: `REDIS_HOST`, `ARI_URL`, `PORT`). Consulta los respectivos archivos `.js` para ver cuáles se utilizan.
+*   **Variables de Entorno**:
+    *   El proyecto ahora utiliza un archivo `.env.example` como plantilla para las variables de entorno. Los valores reales deben colocarse en un archivo `.env`.
+    *   Variables clave incluyen `ENABLE_API` y `ENABLE_ARI` para activar/desactivar los respectivos módulos.
+    *   Otras variables configuran la conexión a Redis (`REDIS_HOST`, `REDIS_PORT`, etc.) y Asterisk ARI (`ARI_URL`, `ARI_APP_NAME`, etc.).
+    *   Consulta `.env.example` para la lista completa y `src/index.js` para ver cómo se utilizan `ENABLE_API` y `ENABLE_ARI`.
 *   **Manejo de Sesiones**: Las sesiones de la FSM se identifican por un `sessionId` y se persisten en Redis. El `sessionId` es proporcionado en la URL para la API y es el ID del canal para ARI.
 
 ## Cómo (teóricamente) Ejecutar
