@@ -33,10 +33,32 @@ function loadStateConfig() {
         throw new Error(`El 'initialState' ("${stateConfiguration.initialState}") no existe en la definición de 'states'.`);
     }
 
-    console.log('Configuración de estados cargada exitosamente.');
+    // Validación adicional para la nueva estructura apiHooks
+    for (const stateId in stateConfiguration.states) {
+      const state = stateConfiguration.states[stateId];
+      if (state.apiHooks && typeof state.apiHooks !== 'object') {
+        throw new Error(`El estado "${stateId}" tiene un campo 'apiHooks' que no es un objeto.`);
+      }
+      if (state.apiHooks) {
+        for (const hookName in state.apiHooks) {
+          if (!Array.isArray(state.apiHooks[hookName])) {
+            throw new Error(`En el estado "${stateId}", el hook "${hookName}" dentro de 'apiHooks' debe ser un array.`);
+          }
+          if (!state.apiHooks[hookName].every(apiName => typeof apiName === 'string')) {
+            throw new Error(`En el estado "${stateId}", el hook "${hookName}" dentro de 'apiHooks' debe contener solo strings (IDs de API).`);
+          }
+        }
+      }
+      // También nos aseguramos de que el antiguo apisToCall ya no exista, para evitar confusiones
+      if (state.hasOwnProperty('apisToCall')) {
+        throw new Error(`El estado "${stateId}" todavía contiene el antiguo campo 'apisToCall'. Debe ser reemplazado por 'apiHooks'.`);
+      }
+    }
+
+    console.log('Configuración de estados cargada y validada exitosamente.');
     return stateConfiguration;
   } catch (error) {
-    console.error('Error al cargar la configuración de estados:', error);
+    console.error('Error al cargar o validar la configuración de estados:', error);
     // En un escenario real, podrías querer que la aplicación falle si no puede cargar la configuración.
     // Por ahora, lanzamos el error para que se maneje más arriba o se detenga la app.
     throw error;

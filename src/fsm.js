@@ -131,7 +131,7 @@ async function processInput(sessionId, intent, inputParameters = {}) {
     currentStateConfig: currentStateConfig, // Estado desde el que se partió para esta transición
     nextStateConfig: nextStateConfig,       // Estado al que se llegó
     parametersToCollect: parametersToCollect,
-    apisToCall: nextStateConfig.apisToCall || [],
+    apiHooks: nextStateConfig.apiHooks || {}, // Devolver el objeto apiHooks completo (o vacío si no está definido)
     sessionData: sessionData, // Devuelve el estado completo de la sesión actualizado
   };
 }

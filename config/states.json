@@ -8,7 +8,11 @@
         "required": ["patient_age"],
         "optional": ["caller_name"]
       },
-      "apisToCall": ["api_log_interaction_start", "api_check_age_eligibility"],
+      "apiHooks": {
+        "onEnterState": ["api_log_interaction_start"],
+        "beforeCollectingParameters": ["api_fetch_age_prompt_variations"],
+        "afterParametersCollected": ["api_check_age_eligibility", "api_log_age_provided"]
+      },
       "transitions": [
         {
           "nextState": "2_get_patient_id",
@@ -26,7 +30,6 @@
           "nextState": "98_age_ineligible",
           "condition": {
             "intent": "age_ineligible_system_detected"
-            // Esta intención sería puesta por el sistema después de llamar a api_check_age_eligibility
           }
         }
       ],
@@ -39,7 +42,11 @@
         "required": ["patient_id_number"],
         "optional": ["id_document_type"]
       },
-      "apisToCall": ["api_verify_id_prerequisites"],
+      "apiHooks": {
+        "onEnterState": ["api_log_enter_get_id_state"],
+        "beforeCollectingParameters": ["api_verify_id_prerequisites", "api_get_id_input_instructions"],
+        "afterParametersCollected": ["api_validate_id_format", "api_log_id_provided"]
+      },
       "transitions": [
         {
           "nextState": "3_get_specialty",
@@ -54,7 +61,7 @@
           }
         },
         {
-          "nextState": "2_get_patient_id_retry_invalid", // Ejemplo de reintento
+          "nextState": "2_get_patient_id_retry_invalid",
           "condition": {
             "intent": "id_invalid_system_detected"
           }
@@ -68,7 +75,11 @@
       "parameters": {
         "required": ["medical_specialty"]
       },
-      "apisToCall": ["api_fetch_available_specialties"],
+      "apiHooks": {
+        "onEnterState": ["api_fetch_available_specialties"],
+        "beforeCollectingParameters": [],
+        "afterParametersCollected": ["api_validate_chosen_specialty"]
+      },
       "transitions": [
         {
           "nextState": "4_get_office_preference",
@@ -91,12 +102,16 @@
       "parameters": {
         "optional": ["preferred_office_id", "wants_nearest_office"]
       },
-      "apisToCall": ["api_fetch_offices_for_specialty"],
+      "apiHooks": {
+        "onEnterState": ["api_fetch_offices_for_specialty"],
+        "beforeCollectingParameters": [],
+        "afterParametersCollected": ["api_log_office_preference"]
+      },
       "transitions": [
         {
           "nextState": "5_get_appointment_day",
           "condition": {
-            "allParametersMet": true // Asume que al menos una de las opcionales se llenará o no es estrictamente necesaria para avanzar
+            "allParametersMet": true
           }
         },
         {
@@ -114,7 +129,11 @@
       "parameters": {
         "required": ["appointment_date"]
       },
-      "apisToCall": ["api_check_doctor_availability_for_day"],
+      "apiHooks": {
+        "onEnterState": [],
+        "beforeCollectingParameters": ["api_check_doctor_availability_for_day_precheck"],
+        "afterParametersCollected": ["api_validate_date_format", "api_check_doctor_availability_for_day_final"]
+      },
       "transitions": [
         {
           "nextState": "6_get_appointment_time",
@@ -137,17 +156,21 @@
       "parameters": {
         "required": ["appointment_time"]
       },
-      "apisToCall": ["api_book_appointment_slot"],
+      "apiHooks": {
+        "onEnterState": ["api_fetch_available_slots_for_day"],
+        "beforeCollectingParameters": [],
+        "afterParametersCollected": ["api_book_appointment_slot"]
+      },
       "transitions": [
         {
           "nextState": "7_confirmation_and_closing",
           "condition": {
             "allParametersMet": true,
-            "intent": "appointment_booked_success" // Intención del sistema tras api_book_appointment_slot
+            "intent": "appointment_booked_success"
           }
         },
         {
-          "nextState": "6_retry_appointment_time", // Estado para reintentar si el slot no está disponible
+          "nextState": "6_retry_appointment_time",
           "condition": {
             "intent": "appointment_slot_unavailable"
           }
@@ -159,26 +182,37 @@
           }
         }
       ]
-      // No defaultNextState aquí, depende del resultado de la API de booking
     },
     "7_confirmation_and_closing": {
       "id": "7_confirmation_and_closing",
       "description": "Confirmar todos los detalles de la cita agendada y despedirse.",
       "parameters": {},
-      "apisToCall": ["api_send_confirmation_message", "api_log_interaction_complete"],
-      "transitions": [] // Estado final del flujo exitoso
+      "apiHooks": {
+        "onEnterState": ["api_send_confirmation_message", "api_log_interaction_complete"],
+        "beforeCollectingParameters": [],
+        "afterParametersCollected": []
+      },
+      "transitions": []
     },
     "98_age_ineligible": {
       "id": "98_age_ineligible",
       "description": "Informar al usuario que no es elegible por edad y finalizar.",
-      "apisToCall": ["api_log_ineligible_interaction"],
+      "apiHooks": {
+        "onEnterState": ["api_log_ineligible_interaction", "api_send_age_ineligible_notification"],
+        "beforeCollectingParameters": [],
+        "afterParametersCollected": []
+      },
       "transitions": []
     },
     "99_transfer_to_human": {
       "id": "99_transfer_to_human",
       "description": "Transferir la conversación a un agente humano.",
-      "apisToCall": ["api_initiate_transfer_to_human_agent", "api_log_transfer_request"],
-      "transitions": [] // Estado final para este flujo
+      "apiHooks": {
+        "onEnterState": ["api_initiate_transfer_to_human_agent", "api_log_transfer_request"],
+        "beforeCollectingParameters": [],
+        "afterParametersCollected": []
+      },
+      "transitions": []
     },
     "2_get_patient_id_retry_invalid": {
       "id": "2_get_patient_id_retry_invalid",
@@ -187,7 +221,11 @@
          "required": ["patient_id_number"],
          "optional": ["id_document_type"]
       },
-      "apisToCall": [], // Podría haber una API para loggear el reintento
+      "apiHooks": {
+        "onEnterState": ["api_log_id_retry_event"],
+        "beforeCollectingParameters": ["api_get_id_input_retry_instructions"],
+        "afterParametersCollected": ["api_validate_id_format", "api_log_id_provided_after_retry"]
+      },
       "transitions": [
         {
           "nextState": "3_get_specialty",
@@ -196,7 +234,7 @@
           }
         },
         {
-          "nextState": "99_transfer_to_human", // Si falla múltiples veces, podría ir a humano
+          "nextState": "99_transfer_to_human",
           "condition": {
             "intent": "request_human_agent_after_max_retries"
           }
@@ -210,7 +248,11 @@
       "parameters": {
         "required": ["appointment_time"]
       },
-      "apisToCall": ["api_book_appointment_slot"],
+      "apiHooks": {
+        "onEnterState": ["api_log_time_retry_event", "api_fetch_alternative_slots"],
+        "beforeCollectingParameters": [],
+        "afterParametersCollected": ["api_book_appointment_slot"]
+      },
       "transitions": [
          {
           "nextState": "7_confirmation_and_closing",
@@ -220,7 +262,7 @@
           }
         },
         {
-          "nextState": "6_retry_appointment_time", // Puede reintentar el mismo estado si vuelve a fallar
+          "nextState": "6_retry_appointment_time",
           "condition": {
             "intent": "appointment_slot_unavailable"
           }

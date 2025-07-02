@@ -36,14 +36,25 @@ async function handleStasisStart(event, channel) {
     // Por ejemplo, reproducir un audio, esperar DTMF, etc.
 
     // 1. Devolver APIs a llamar (esto es informativo para el sistema externo)
-    if (currentFsmState.apisToCall && currentFsmState.apisToCall.length > 0) {
-      console.log(`ARI: Para el estado ${currentFsmState.nextStateId}, se deben llamar las APIs: ${currentFsmState.apisToCall.join(', ')}`);
-      // Aquí, en un sistema real, se podrían emitir eventos o logs para que otro servicio actúe.
-      // O, si esta aplicación también maneja llamadas API, las haría aquí.
-      // Por ahora, solo lo registramos.
-      // También podríamos setear variables de canal si el Dialplan necesita esta info.
-      // Ejemplo:
-      // await channel.setChannelVar({ variable: 'APIS_TO_CALL', value: currentFsmState.apisToCall.join(',') });
+    // Ahora usamos apiHooks. Para ARI, la forma de actuar sobre estos hooks puede variar.
+    // Por simplicidad, podríamos loguear las APIs del hook 'onEnterState' o todas.
+    if (currentFsmState.apiHooks && Object.keys(currentFsmState.apiHooks).length > 0) {
+      console.log(`ARI: Para el estado ${currentFsmState.nextStateId}, se definieron los siguientes apiHooks:`);
+      for (const hookName in currentFsmState.apiHooks) {
+        if (currentFsmState.apiHooks[hookName] && currentFsmState.apiHooks[hookName].length > 0) {
+          console.log(`  Hook '${hookName}': ${currentFsmState.apiHooks[hookName].join(', ')}`);
+        }
+      }
+      // Ejemplo de cómo se podría actuar específicamente sobre un hook, como 'onEnterState':
+      const onEnterApis = currentFsmState.apiHooks.onEnterState;
+      if (onEnterApis && onEnterApis.length > 0) {
+        console.log(`ARI: Específicamente, para 'onEnterState' del estado ${currentFsmState.nextStateId}, APIs: ${onEnterApis.join(', ')}`);
+        // Aquí se podrían setear variables de canal si el Dialplan necesita esta info para onEnterState.
+        // await channel.setChannelVar({ variable: 'ON_ENTER_APIS', value: onEnterApis.join(',') });
+      }
+      // La aplicación externa o el dialplan necesitarían una lógica más sofisticada
+      // para manejar los diferentes hooks (onEnterState, beforeCollectingParameters, etc.)
+      // en el contexto de una llamada de voz. Por ahora, la FSM los provee.
     }
 
     // 2. Determinar qué preguntar o qué hacer basándose en `parametersToCollect`
