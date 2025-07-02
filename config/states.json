@@ -1,0 +1,237 @@
+{
+  "initialState": "1_welcome_and_age",
+  "states": {
+    "1_welcome_and_age": {
+      "id": "1_welcome_and_age",
+      "description": "Dar la bienvenida al paciente y capturar su edad para definir el nivel de formalidad y verificar elegibilidad inicial.",
+      "parameters": {
+        "required": ["patient_age"],
+        "optional": ["caller_name"]
+      },
+      "apisToCall": ["api_log_interaction_start", "api_check_age_eligibility"],
+      "transitions": [
+        {
+          "nextState": "2_get_patient_id",
+          "condition": {
+            "allParametersMet": true
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human",
+          "condition": {
+            "intent": "request_human_agent"
+          }
+        },
+        {
+          "nextState": "98_age_ineligible",
+          "condition": {
+            "intent": "age_ineligible_system_detected"
+            // Esta intención sería puesta por el sistema después de llamar a api_check_age_eligibility
+          }
+        }
+      ],
+      "defaultNextState": "2_get_patient_id"
+    },
+    "2_get_patient_id": {
+      "id": "2_get_patient_id",
+      "description": "Solicitar el número de identificación o cédula del paciente.",
+      "parameters": {
+        "required": ["patient_id_number"],
+        "optional": ["id_document_type"]
+      },
+      "apisToCall": ["api_verify_id_prerequisites"],
+      "transitions": [
+        {
+          "nextState": "3_get_specialty",
+          "condition": {
+            "allParametersMet": true
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human",
+          "condition": {
+            "intent": "request_human_agent"
+          }
+        },
+        {
+          "nextState": "2_get_patient_id_retry_invalid", // Ejemplo de reintento
+          "condition": {
+            "intent": "id_invalid_system_detected"
+          }
+        }
+      ],
+      "defaultNextState": "3_get_specialty"
+    },
+    "3_get_specialty": {
+      "id": "3_get_specialty",
+      "description": "Preguntar por la especialidad médica requerida.",
+      "parameters": {
+        "required": ["medical_specialty"]
+      },
+      "apisToCall": ["api_fetch_available_specialties"],
+      "transitions": [
+        {
+          "nextState": "4_get_office_preference",
+          "condition": {
+            "allParametersMet": true
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human",
+          "condition": {
+            "intent": "request_human_agent"
+          }
+        }
+      ],
+      "defaultNextState": "4_get_office_preference"
+    },
+    "4_get_office_preference": {
+      "id": "4_get_office_preference",
+      "description": "Preguntar si tiene preferencia de oficina o si desea la más cercana/disponible.",
+      "parameters": {
+        "optional": ["preferred_office_id", "wants_nearest_office"]
+      },
+      "apisToCall": ["api_fetch_offices_for_specialty"],
+      "transitions": [
+        {
+          "nextState": "5_get_appointment_day",
+          "condition": {
+            "allParametersMet": true // Asume que al menos una de las opcionales se llenará o no es estrictamente necesaria para avanzar
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human",
+          "condition": {
+            "intent": "request_human_agent"
+          }
+        }
+      ],
+      "defaultNextState": "5_get_appointment_day"
+    },
+    "5_get_appointment_day": {
+      "id": "5_get_appointment_day",
+      "description": "Pedir al paciente el día en el que desea la cita.",
+      "parameters": {
+        "required": ["appointment_date"]
+      },
+      "apisToCall": ["api_check_doctor_availability_for_day"],
+      "transitions": [
+        {
+          "nextState": "6_get_appointment_time",
+          "condition": {
+            "allParametersMet": true
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human",
+          "condition": {
+            "intent": "request_human_agent"
+          }
+        }
+      ],
+      "defaultNextState": "6_get_appointment_time"
+    },
+    "6_get_appointment_time": {
+      "id": "6_get_appointment_time",
+      "description": "Pedir y confirmar la hora de la cita.",
+      "parameters": {
+        "required": ["appointment_time"]
+      },
+      "apisToCall": ["api_book_appointment_slot"],
+      "transitions": [
+        {
+          "nextState": "7_confirmation_and_closing",
+          "condition": {
+            "allParametersMet": true,
+            "intent": "appointment_booked_success" // Intención del sistema tras api_book_appointment_slot
+          }
+        },
+        {
+          "nextState": "6_retry_appointment_time", // Estado para reintentar si el slot no está disponible
+          "condition": {
+            "intent": "appointment_slot_unavailable"
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human",
+          "condition": {
+            "intent": "request_human_agent"
+          }
+        }
+      ]
+      // No defaultNextState aquí, depende del resultado de la API de booking
+    },
+    "7_confirmation_and_closing": {
+      "id": "7_confirmation_and_closing",
+      "description": "Confirmar todos los detalles de la cita agendada y despedirse.",
+      "parameters": {},
+      "apisToCall": ["api_send_confirmation_message", "api_log_interaction_complete"],
+      "transitions": [] // Estado final del flujo exitoso
+    },
+    "98_age_ineligible": {
+      "id": "98_age_ineligible",
+      "description": "Informar al usuario que no es elegible por edad y finalizar.",
+      "apisToCall": ["api_log_ineligible_interaction"],
+      "transitions": []
+    },
+    "99_transfer_to_human": {
+      "id": "99_transfer_to_human",
+      "description": "Transferir la conversación a un agente humano.",
+      "apisToCall": ["api_initiate_transfer_to_human_agent", "api_log_transfer_request"],
+      "transitions": [] // Estado final para este flujo
+    },
+    "2_get_patient_id_retry_invalid": {
+      "id": "2_get_patient_id_retry_invalid",
+      "description": "Informar que la cédula es inválida y solicitarla de nuevo.",
+      "parameters": {
+         "required": ["patient_id_number"],
+         "optional": ["id_document_type"]
+      },
+      "apisToCall": [], // Podría haber una API para loggear el reintento
+      "transitions": [
+        {
+          "nextState": "3_get_specialty",
+          "condition": {
+            "allParametersMet": true
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human", // Si falla múltiples veces, podría ir a humano
+          "condition": {
+            "intent": "request_human_agent_after_max_retries"
+          }
+        }
+      ],
+      "defaultNextState": "3_get_specialty"
+    },
+     "6_retry_appointment_time": {
+      "id": "6_retry_appointment_time",
+      "description": "Informar que la hora no está disponible y solicitar otra.",
+      "parameters": {
+        "required": ["appointment_time"]
+      },
+      "apisToCall": ["api_book_appointment_slot"],
+      "transitions": [
+         {
+          "nextState": "7_confirmation_and_closing",
+          "condition": {
+            "allParametersMet": true,
+            "intent": "appointment_booked_success"
+          }
+        },
+        {
+          "nextState": "6_retry_appointment_time", // Puede reintentar el mismo estado si vuelve a fallar
+          "condition": {
+            "intent": "appointment_slot_unavailable"
+          }
+        },
+        {
+          "nextState": "99_transfer_to_human",
+          "condition": {
+            "intent": "request_human_agent"
+          }
+        }
+      ]
+    }
+  }
+}
