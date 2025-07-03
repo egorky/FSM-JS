@@ -4,10 +4,10 @@ Este proyecto implementa una Máquina de Estados Finitos (FSM) utilizando Node.j
 
 ## Características Principales
 
-*   **Motor de FSM Configurable y Flexible en Respuestas**: La lógica de los estados, transiciones y parámetros a recolectar se define en `config/states.json`. Crucialmente, cada estado puede definir un objeto `payloadResponse` de formato libre. Este `payloadResponse` es devuelto tal cual por la FSM, permitiendo al diseñador de la conversación especificar exactamente qué información (ej: prompts, ganchos de API, datos para UI, herramientas a usar) debe recibir la aplicación cliente para cada estado.
-*   **Persistencia de Sesión**: Utiliza Redis para almacenar el estado actual de cada conversación (`currentStateId`) y todos los parámetros acumulados (`collectedParameters`). Cada sesión se identifica con un `sessionId`.
-*   **Interfaz API RESTful**: Expone un endpoint (`POST /fsm/:sessionId`). Acepta `intent` y `parameters` nuevos. Devuelve el `nextStateId`, los `parametersToCollect` para el nuevo estado, el `payloadResponse` completo definido para ese `nextStateId`, y la totalidad de `collectedParameters` (fusión de los parámetros de sesión y los nuevos).
-*   **Integración con Asterisk ARI**: Incluye un módulo para conectar con Asterisk ARI. La FSM puede así guiar flujos de llamadas, con el `payloadResponse` proveyendo la información necesaria para las acciones ARI.
+*   **Motor de FSM Configurable y Flexible en Respuestas**: La lógica de los estados, transiciones y parámetros a recolectar se define en `config/states.json`. Cada estado puede definir un objeto `payloadResponse` de formato libre. **La FSM procesa los strings dentro de este `payloadResponse` para sustituir placeholders (`{{param}}`, `{{current_date}}`) y ejecutar funciones predefinidas (ej: `{{toUpperCase(param)}}`) antes de devolverlo.** Esto permite que la aplicación cliente reciba contenido dinámico y listo para usar (ej: prompts para TTS).
+*   **Persistencia de Sesión**: Utiliza Redis para almacenar el estado actual de cada conversación (`currentStateId`) y todos los parámetros acumulados (`collectedParameters`). Cada sesión se identifica con un `sessionId` y tiene un TTL configurable.
+*   **Interfaz API RESTful**: Expone un endpoint (`POST /fsm/:sessionId`). Acepta `intent` y `parameters` nuevos. Devuelve el `nextStateId`, los `parametersToCollect` para el nuevo estado, el `payloadResponse` (ya procesado con sustituciones) definido para ese `nextStateId`, y la totalidad de `collectedParameters` (fusión de los parámetros de sesión y los nuevos).
+*   **Integración con Asterisk ARI**: Incluye un módulo para conectar con Asterisk ARI. La FSM puede así guiar flujos de llamadas, con el `payloadResponse` procesado proveyendo la información y textos listos para acciones ARI.
 *   **Manejo de Intenciones**: Las intenciones del usuario o del sistema pueden dirigir el flujo a estados diferentes, independientemente de la recolección de parámetros.
 *   **Modularidad**: El código está estructurado en módulos con responsabilidades claras:
     *   Carga de configuración (`configLoader.js`)
@@ -27,25 +27,29 @@ Cuando una interacción ocurre (ya sea una solicitud API o un evento en una llam
     *   Evalúa si la intención actual implica una transición a un flujo diferente.
     *   Si no hay una intención prioritaria, verifica si los parámetros recolectados cumplen las condiciones para avanzar al siguiente estado definido.
     *   Actualiza el estado de la sesión en Redis (importante: `sessionData.parameters` ahora contiene la fusión de los parámetros de sesión anteriores y los parámetros recién llegados en la solicitud).
+    *   **Procesa el `payloadResponse` del estado de destino**: Sustituye placeholders y ejecuta funciones predefinidas usando los `collectedParameters` y valores de fecha/hora actuales.
 4.  La FSM **devuelve**:
     *   `nextStateId`: Identificador del nuevo estado de la conversación.
     *   `parametersToCollect`: Un objeto indicando qué parámetros son `required` y `optional` para el nuevo estado, y que aún no han sido proporcionados.
-    *   `payloadResponse`: El objeto completo definido en el campo `payloadResponse` del estado de destino en `config/states.json`. La FSM lo devuelve tal cual, permitiendo flexibilidad total en su contenido (puede incluir `apiHooks`, `prompts`, `tools`, etc.).
+    *   `payloadResponse`: El objeto `payloadResponse` (definido en `config/states.json`) **después de haber sido procesado** (con placeholders sustituidos y funciones ejecutadas).
     *   `collectedParameters`: Un objeto con **todos** los parámetros acumulados durante la sesión, incluyendo los que se recibieron en la solicitud actual y los que ya estaban en Redis.
 
 ## Escenario de Ejemplo: Agendamiento de Cita
 
 1.  **Inicio**: El usuario interactúa. La FSM se inicializa en el estado "1\_welcome\_and\_age".
-    *   Respuesta FSM (simplificada): `nextStateId: "1_welcome_and_age"`, `parametersToCollect: { required: ["patient_age"] }`, `payloadResponse: { customInstructions: "...", uiHints: {...}, apiHooks: { onEnterState: ["api_log_interaction_start"], ... } }`, `collectedParameters: {}`.
-2.  **Usuario provee edad**: El sistema recolecta la edad (`patient_age: 30`).
-    *   Entrada FSM: `intent: null`, `parameters: { "patient_age": 30 }`.
-    *   Respuesta FSM: `nextStateId: "2_get_patient_id"`, `parametersToCollect: { required: ["patient_id_number"] }`, `payloadResponse: { prompts: {...}, apiHooks: { ... } }`, `collectedParameters: { "patient_age": 30 }`.
-3.  **Usuario provee cédula**: El sistema recolecta la cédula (`patient_id_number: "123"`).
+    *   `config/states.json` para `1_welcome_and_age` tiene `payloadResponse: { "greeting": "Hola {{default(collectedParameters.caller_name, 'estimado usuario')}}, bienvenido. Hoy es {{current_date}}." }`
+    *   Respuesta FSM: `nextStateId: "1_welcome_and_age"`, `parametersToCollect: { required: ["patient_age"] }`, `payloadResponse: { "greeting": "Hola estimado usuario, bienvenido. Hoy es AAAA-MM-DD." }`, `collectedParameters: {}`. (Suponiendo que `caller_name` no se proveyó).
+2.  **Usuario provee edad y nombre**: `caller_name: "Ana"`, `patient_age: 30`.
+    *   Entrada FSM: `intent: null`, `parameters: { "caller_name": "Ana", "patient_age": 30 }`.
+    *   `config/states.json` para `2_get_patient_id` tiene `payloadResponse: { "prompts": { "main": "Gracias, {{capitalize(collectedParameters.caller_name)}}. Por favor, ingrese su número de identificación."}}}`
+    *   Respuesta FSM: `nextStateId: "2_get_patient_id"`, `parametersToCollect: { required: ["patient_id_number"] }`, `payloadResponse: { "prompts": { "main": "Gracias, Ana. Por favor, ingrese su número de identificación." } }`, `collectedParameters: { "caller_name": "Ana", "patient_age": 30 }`.
+3.  **Usuario provee cédula**: `patient_id_number: "123"`.
     *   Entrada FSM: `intent: null`, `parameters: { "patient_id_number": "123" }`.
-    *   Respuesta FSM: `nextStateId: "3_get_specialty"`, etc., con su `payloadResponse`, y `collectedParameters: { "patient_age": 30, "patient_id_number": "123" }`.
-4.  **Usuario cambia de intención**: En cualquier momento, el usuario podría indicar "quiero hablar con un agente".
-    *   Entrada FSM: `intent: "request_human_agent"`, `parameters: {}` (o los que se tuvieran).
-    *   Respuesta FSM: `nextStateId: "99_transfer_to_human"`, `parametersToCollect: {}`, `payloadResponse: { transferMessage: "...", apiHooks: { ... } }`, `collectedParameters: { "patient_age": 30, "patient_id_number": "123" }` (se mantienen los parámetros recolectados hasta el momento del cambio de intención).
+    *   Respuesta FSM: `nextStateId: "3_get_specialty"`, etc., con su `payloadResponse` procesado, y `collectedParameters: { "caller_name": "Ana", "patient_age": 30, "patient_id_number": "123" }`.
+4.  **Usuario cambia de intención**: En cualquier momento.
+    *   Entrada FSM: `intent: "request_human_agent"`.
+    *   `config/states.json` para `99_transfer_to_human` tiene `payloadResponse: { "transferMessage": "Un momento, {{capitalize(collectedParameters.caller_name)}}, por favor, lo transferiré con un agente. Hora de solicitud: {{current_datetime}}."}`.
+    *   Respuesta FSM: `nextStateId: "99_transfer_to_human"`, `parametersToCollect: {}`, `payloadResponse: { "transferMessage": "Un momento, Ana, por favor, lo transferiré con un agente. Hora de solicitud: AAAA-MM-DD HH:MM:SS." }`, `collectedParameters: { "caller_name": "Ana", "patient_age": 30, "patient_id_number": "123" }`.
 
 ## Configuración y Ejecución
 
@@ -58,7 +62,9 @@ Cuando una interacción ocurre (ya sea una solicitud API o un evento en una llam
     *   **Variables Clave en `.env`**:
         *   `ENABLE_API`: Controla si se inicia el servidor API (`true` por defecto).
     *   `ENABLE_ARI`: Controla si se inicia la conexión ARI (`true` por defecto).
+    *   `ENABLE_SOCKET_SERVER`: Controla si se inicia el servidor de sockets UNIX (`true` por defecto).
     *   `PORT`: Puerto para el servidor API (defecto: 3000, relevante si `ENABLE_API="true"`).
+    *   `FSM_SOCKET_PATH`: Ruta del archivo para el socket UNIX (defecto: `/tmp/fsm_service.sock`, relevante si `ENABLE_SOCKET_SERVER="true"`).
     *   `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`: Para la conexión a Redis.
     *   `REDIS_SESSION_TTL`: Tiempo de vida (en segundos) para las sesiones en Redis (ej: 3600 para 1 hora; 0 o vacío para sin expiración).
     *   `ARI_APP_NAME`, `ARI_USERNAME`, `ARI_PASSWORD`, `ARI_URL`: Para la conexión ARI (relevante si `ENABLE_ARI="true"`).

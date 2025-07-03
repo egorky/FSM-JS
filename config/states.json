@@ -9,7 +9,8 @@
         "optional": ["caller_name"]
       },
       "payloadResponse": {
-        "customInstructions": "Greet the user warmly and ask for their age.",
+        "greeting": "Hola {{default(collectedParameters.caller_name, 'estimado usuario')}}, bienvenido. Hoy es {{current_date}}.",
+        "customInstructions": "Greet the user {{toUpperCase(collectedParameters.caller_name)}} warmly and ask for their age. Current time: {{current_time}}",
         "uiHints": { "ageInputType": "number" },
         "apiHooks": {
           "onEnterState": ["api_log_interaction_start"],
@@ -42,7 +43,7 @@
       },
       "payloadResponse": {
         "prompts": {
-          "main": "Por favor, ingrese su número de identificación.",
+          "main": "Gracias, {{capitalize(collectedParameters.caller_name)}}. Por favor, ingrese su número de identificación {{default(collectedParameters.id_document_type, '')}}.",
           "validationExample": "El formato debe ser XXXXXXXXXX."
         },
         "apiHooks": {
@@ -175,7 +176,9 @@
       "description": "Confirmar todos los detalles de la cita agendada y despedirse.",
       "parameters": {},
       "payloadResponse": {
-        "finalMessage": "Su cita ha sido confirmada. ¡Gracias!",
+        "finalMessage": "Su cita para {{medical_specialty}} el {{appointment_date}} a las {{appointment_time}} ha sido confirmada. ¡Gracias, {{capitalize(collectedParameters.caller_name)}}!",
+        "summaryForSystem": "Cita: {{medical_specialty}}, Día: {{appointment_date}}, Hora: {{appointment_time}}, Paciente: {{collectedParameters.patient_id_number}}, Edad: {{collectedParameters.patient_age}}",
+        "totalCost": "Costo total: {{formatNumber(collectedParameters.cost, 2)}}",
         "apiHooks": {
           "onEnterState": ["api_send_confirmation_message", "api_log_interaction_complete"]
         }
@@ -186,7 +189,7 @@
       "id": "98_age_ineligible",
       "description": "Informar al usuario que no es elegible por edad y finalizar.",
       "payloadResponse": {
-        "messageToUser": "Lo sentimos, no cumple con el requisito de edad para este servicio.",
+        "messageToUser": "Lo sentimos {{default(collectedParameters.caller_name, '')}}, no cumple con el requisito de edad ({{collectedParameters.patient_age}}) para este servicio. Registrado a las {{current_time}}.",
         "apiHooks": {
           "onEnterState": ["api_log_ineligible_interaction", "api_send_age_ineligible_notification"]
         }
@@ -197,7 +200,7 @@
       "id": "99_transfer_to_human",
       "description": "Transferir la conversación a un agente humano.",
       "payloadResponse": {
-        "transferMessage": "Un momento, por favor, lo transferiré con un agente.",
+        "transferMessage": "Un momento, {{capitalize(collectedParameters.caller_name)}}, por favor, lo transferiré con un agente. Hora de solicitud: {{current_datetime}}.",
         "apiHooks": {
           "onEnterState": ["api_initiate_transfer_to_human_agent", "api_log_transfer_request"]
         }

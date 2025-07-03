@@ -12,54 +12,49 @@ El proyecto está organizado de la siguiente manera:
     -   `states.json`: Define la estructura de la máquina de estados. Cada estado incluye:
         -   `id`, `description`.
         -   `parameters`: Con `required` y `optional`.
-        -   `payloadResponse`: Un objeto de formato libre definido por el usuario que se devuelve tal cual cuando se alcanza el estado. Puede contener cualquier estructura JSON (ej: `apiHooks`, `prompts`, `tools`, etc.). Reemplaza al antiguo campo `apiHooks` (que ahora podría estar anidado dentro de `payloadResponse` si se desea).
-        -   `transitions`: Para definir los siguientes estados basados en condiciones (intención, parámetros cumplidos).
+        -   `payloadResponse`: Un objeto de formato libre. **Los strings dentro de este objeto son procesados por `src/templateProcessor.js` para sustituir placeholders (`{{param}}`, `{{current_date}}`) y ejecutar funciones predefinidas (ej: `{{toUpperCase(param)}}`) antes de ser devueltos por la FSM.**
+        -   `transitions`: Para definir los siguientes estados basados en condiciones.
         -   `defaultNextState`.
 -   `src/`: Contiene el código fuente de la aplicación.
-    -   `index.js`: Punto de entrada principal de la aplicación. Carga `dotenv` y orquesta la inicialización de los módulos.
-    -   `configLoader.js`: Módulo responsable de cargar y validar el archivo `config/states.json`.
-    -   `fsm.js`: Contiene la lógica central de la máquina de estados. Procesa entradas, gestiona estados y determina las acciones siguientes.
-    -   `redisClient.js`: Gestiona la conexión y las interacciones con la base de datos Redis, utilizada para persistir el estado de las sesiones de la FSM.
-    -   `apiServer.js`: Implementa un servidor Express para exponer la FSM a través de una API RESTful (JSON).
-    -   `ariClient.js`: Implementa la conexión con Asterisk mediante ARI (Asterisk REST Interface) para integrar la FSM con un sistema de telefonía.
+    -   `index.js`: Punto de entrada. Carga `dotenv`, inicializa módulos.
+    -   `configLoader.js`: Carga y valida `states.json`.
+    -   `fsm.js`: Lógica central de la FSM. **Importante: Ahora procesa el `payloadResponse` usando `templateProcessor.js` antes de devolverlo.**
+    -   `redisClient.js`: Cliente Redis.
+    -   `apiServer.js`: Servidor API Express.
+    -   `ariClient.js`: Cliente Asterisk ARI.
+    -   `templateProcessor.js`: **Nuevo módulo** responsable de procesar strings en `payloadResponse` para sustituir placeholders y ejecutar funciones predefinidas.
 
 ## Flujo General de la Aplicación
 
-1.  **Inicio (`src/index.js`)**:
-    *   Carga la configuración de estados (`config/states.json`).
-    *   Establece conexión con Redis.
-    *   Inicia el servidor API (`src/apiServer.js`).
-    *   Opcionalmente (controlado por `ENABLE_ARI`), conecta con Asterisk ARI (`src/ariClient.js`).
+1.  **Inicio (`src/index.js`)**: Similar a antes.
 
-2.  **Interacción (Modo API)**:
-    *   El cliente envía una solicitud `POST` a `/fsm/:sessionId` con `intent` y `parameters` en el cuerpo.
-    *   `apiServer.js` recibe la solicitud y la pasa a `fsm.js`.
-    *   `fsm.js` utiliza `redisClient.js` para obtener/guardar el estado de la sesión (incluyendo todos los parámetros acumulados).
-    *   `fsm.js` consulta `configLoader.js` para la lógica del estado actual.
-    *   `fsm.js` devuelve el nuevo estado (`nextStateId`), los parámetros a recolectar (`parametersToCollect`), el `payloadResponse` definido para el nuevo estado, y todos los `collectedParameters` (fusión de los de sesión y los nuevos).
-    *   `apiServer.js` responde al cliente con esta información completa en formato JSON.
-
-3.  **Interacción (Modo ARI)**:
-    *   Una llamada entrante en Asterisk es dirigida a la aplicación Stasis registrada por `ariClient.js`.
-    *   `ariClient.js` maneja el evento `StasisStart`. El ID del canal de Asterisk se usa como `sessionId`.
-    *   Se llama a `fsm.js` para procesar la interacción.
-    *   La respuesta de `fsm.js` (incluyendo `nextStateId`, `parametersToCollect`, `payloadResponse`, y `collectedParameters`) se utiliza para guiar la interacción. `ariClient.js` ahora recibe el `payloadResponse` completo y puede (conceptualmente) usar esta estructura para decidir las acciones de llamada.
-    *   **Nota**: La lógica de interacción detallada en `ariClient.js` es un esqueleto. La interpretación del `payloadResponse` para acciones ARI es responsabilidad del desarrollador que integre con Asterisk.
+2.  **Interacción (Modo API / Socket / ARI)**:
+    *   La solicitud llega a `fsm.js`.
+    *   `fsm.js` determina el `nextStateId` y obtiene el `payloadResponse` crudo del `config/states.json`.
+    *   **Nuevo Paso de Procesamiento**: `fsm.js` pasa el `payloadResponse` crudo y los `collectedParameters` a `templateProcessor.js`.
+    *   `templateProcessor.js` devuelve el `payloadResponse` con todos los placeholders y funciones resueltos.
+    *   `fsm.js` devuelve este `payloadResponse` procesado, junto con `nextStateId`, `parametersToCollect`, y `collectedParameters`.
+    *   `apiServer.js` (o `socketServer.js` o `ariClient.js`) envía esta respuesta procesada al cliente.
 
 ## Consideraciones para el Desarrollo
 
-*   **Configuración de Estados (`config/states.json`)**: Cualquier cambio en la lógica de la conversación (nuevos estados, cambio en parámetros, contenido del `payloadResponse` para cada estado, etc.) debe realizarse en este archivo. Asegúrate de que la estructura del JSON sea válida. El `payloadResponse` es un objeto de formato libre.
-*   **Parámetros Acumulados**: La FSM se encarga de fusionar los parámetros recibidos en cada solicitud con los ya existentes en la sesión de Redis. La respuesta siempre incluirá todos los parámetros recolectados hasta el momento en el campo `collectedParameters`.
-*   **No Instalar Dependencias**: Recuerda la restricción de no instalar dependencias (`npm install`). Solo debes modificar el `package.json` si se requiere añadir o cambiar una dependencia, pero no ejecutar la instalación (esto aplica a menos que se acuerde explícitamente lo contrario, como con `dotenv`).
-*   **Pruebas**: Dado que no se pueden instalar dependencias (generalmente), las pruebas unitarias o de integración que dependan de estos módulos no se podrán ejecutar directamente en este entorno. El desarrollo debe enfocarse en la correcta implementación lógica.
+*   **Procesamiento de Plantillas (`payloadResponse`)**:
+    *   Los strings dentro de `payloadResponse` en `config/states.json` ahora son dinámicos.
+    *   Sintaxis: `{{paramName}}` para parámetros, `{{current_date}}`, `{{current_time}}`, `{{current_datetime}}` para fecha/hora.
+    *   Funciones predefinidas: `{{funcName(arg1, 'literal', ...)}}`. Consulta `src/templateProcessor.js` para la lista de funciones (`default`, `toUpperCase`, `toLowerCase`, `capitalize`, `formatNumber`, `add`, `subtract`).
+    *   Este procesamiento ocurre dentro de `fsm.js` a través de `templateProcessor.js`. La aplicación cliente recibe el `payloadResponse` ya renderizado.
+*   **Parámetros Acumulados**: Se mantiene igual: `collectedParameters` siempre contiene la fusión completa.
+*   **No Instalar Dependencias**: Se mantiene (excepto `dotenv`).
+*   **Pruebas**: Se mantiene.
 *   **Variables de Entorno**:
     *   El proyecto ahora utiliza la librería `dotenv` para cargar automáticamente las variables de entorno desde un archivo `.env` ubicado en la raíz del proyecto.
     *   Se proporciona un archivo `.env.example` como plantilla. Los desarrolladores deben copiar este archivo a `.env` y ajustar los valores para su entorno local. `dotenv` ha sido añadido como una dependencia en `package.json`.
-    *   Variables clave incluyen `ENABLE_API`, `ENABLE_ARI` y `REDIS_SESSION_TTL`.
+    *   Variables clave incluyen `ENABLE_API`, `ENABLE_ARI`, `ENABLE_SOCKET_SERVER`, `FSM_SOCKET_PATH` y `REDIS_SESSION_TTL`.
     *   Otras variables configuran la conexión a Redis (`REDIS_HOST`, `REDIS_PORT`, etc.) y Asterisk ARI (`ARI_URL`, `ARI_APP_NAME`, etc.).
     *   Consulta `.env.example` para la lista completa. `src/index.js` carga estas variables al inicio.
-*   **Manejo de Sesiones**: Las sesiones de la FSM se identifican por un `sessionId` y se persisten en Redis, con un TTL configurable mediante `REDIS_SESSION_TTL`. El `sessionId` es proporcionado en la URL para la API y es el ID del canal para ARI.
-*   **Documentación Detallada del Código**: Para una comprensión profunda de cada módulo, consulta [docs/CodebaseOverview.md](docs/CodebaseOverview.md).
+*   **Interfaces de Comunicación**: La FSM puede ser contactada vía API HTTP, socket UNIX (si está habilitado y configurado), o indirectamente a través de ARI.
+*   **Manejo de Sesiones**: Las sesiones de la FSM se identifican por un `sessionId` y se persisten en Redis, con un TTL configurable mediante `REDIS_SESSION_TTL`. El `sessionId` es proporcionado en la URL para la API, como parte del mensaje JSON para sockets, y es el ID del canal para ARI.
+*   **Documentación Detallada del Código**: Para una comprensión profunda de cada módulo, incluyendo `src/socketServer.js`, consulta [docs/CodebaseOverview.md](docs/CodebaseOverview.md).
 
 ## Cómo Ejecutar (con `.env`)
 

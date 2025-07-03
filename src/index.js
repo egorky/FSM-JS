@@ -1,14 +1,21 @@
 require('dotenv').config(); // Cargar variables de entorno desde .env al inicio
 
 const { startApiServer } = require('./apiServer');
+const { startSocketServer, stopSocketServer } = require('./socketServer'); // Nuevo
 const redisClient = require('./redisClient');
 const { connectAri, closeAri } = require('./ariClient');
+const fsm = require('./fsm'); // Necesario para pasar processInput
 const { loadStateConfig } = require('./configLoader');
 
 async function main() {
   console.log(`Valor de process.env.ENABLE_API: ${process.env.ENABLE_API}`);
   console.log(`Valor de process.env.ENABLE_ARI: ${process.env.ENABLE_ARI}`);
+  console.log(`Valor de process.env.ENABLE_SOCKET_SERVER: ${process.env.ENABLE_SOCKET_SERVER}`);
+  console.log(`Valor de process.env.FSM_SOCKET_PATH: ${process.env.FSM_SOCKET_PATH}`);
+
   let ariConnected = false;
+  let socketServerStarted = false;
+
   try {
     // 1. Cargar configuración de la FSM (ya se hace en apiServer y ariClient al iniciar, pero podemos asegurar aquí)
     console.log('Inicializando aplicación FSM...');
@@ -42,10 +49,25 @@ async function main() {
       console.log('Módulo ARI está deshabilitado por configuración (ENABLE_ARI=false).');
     }
 
-    if (enableApi || enableAri) {
-      console.log('Aplicación FSM iniciada y lista (al menos un módulo está activo).');
+    // 5. Iniciar el servidor de Sockets UNIX (si está habilitado)
+    const enableSocketServer = process.env.ENABLE_SOCKET_SERVER !== 'false'; // Habilitado por defecto
+    const fsmSocketPath = process.env.FSM_SOCKET_PATH;
+    if (enableSocketServer) {
+      if (fsmSocketPath) {
+        startSocketServer(fsmSocketPath, fsm.processInput);
+        socketServerStarted = true;
+      } else {
+        console.warn('ADVERTENCIA: ENABLE_SOCKET_SERVER está en true, pero FSM_SOCKET_PATH no está definido. El servidor de sockets no se iniciará.');
+      }
     } else {
-      console.warn('ADVERTENCIA: Tanto el módulo API como el ARI están deshabilitados. La aplicación no hará mucho.');
+      console.log('Módulo Socket Server está deshabilitado por configuración (ENABLE_SOCKET_SERVER=false).');
+    }
+
+
+    if (enableApi || enableAri || socketServerStarted) {
+      console.log('Aplicación FSM iniciada y lista (al menos un módulo de interfaz está activo).');
+    } else {
+      console.warn('ADVERTENCIA: Todos los módulos de interfaz (API, ARI, Socket) están deshabilitados. La aplicación no podrá recibir solicitudes.');
       // Podríamos optar por salir si ningún módulo está activo, o dejarla corriendo "ociosa".
       // Por ahora, la dejamos correr.
     }
@@ -55,6 +77,9 @@ async function main() {
     // Intentar cerrar conexiones abiertas antes de salir
     if (ariConnected && process.env.ENABLE_ARI !== 'false') { // Solo cerrar si estaba habilitado e intentó conectar
       await closeAri().catch(err => console.error('Error al cerrar ARI durante el apagado por error:', err));
+    }
+    if (socketServerStarted && process.env.ENABLE_SOCKET_SERVER !== 'false') { // Solo cerrar si estaba habilitado e intentó conectar
+      await stopSocketServer(process.env.FSM_SOCKET_PATH).catch(err => console.error('Error al cerrar Socket Server durante el apagado por error:', err));
     }
     await redisClient.quit().catch(err => console.error('Error al cerrar Redis durante el apagado por error:', err));
     process.exit(1);
@@ -72,6 +97,9 @@ async function shutdown(signal) {
 
   if (process.env.ENABLE_ARI !== 'false') { // Solo intentar cerrar si estaba habilitado
       await closeAri().catch(err => console.error('Error al cerrar ARI:', err));
+  }
+  if (process.env.ENABLE_SOCKET_SERVER !== 'false' && process.env.FSM_SOCKET_PATH) { // Solo intentar cerrar si estaba habilitado y con path
+      await stopSocketServer(process.env.FSM_SOCKET_PATH).catch(err => console.error('Error al cerrar Socket Server:', err));
   }
   await redisClient.quit().catch(err => console.error('Error al cerrar Redis:', err));
 

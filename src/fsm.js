@@ -1,5 +1,6 @@
 const { getStateById, getInitialStateId } = require('./configLoader');
-const redisClient = require('./redisClient'); // Asumimos que este módulo existe
+const redisClient = require('./redisClient');
+const { processTemplate } = require('./templateProcessor'); // Nuevo
 
 const FSM_SESSION_PREFIX = 'fsm_session:';
 
@@ -149,12 +150,24 @@ async function processInput(sessionId, intent, inputParameters = {}) {
   // Y sessionData.parameters = currentParameters; se hace antes de guardar.
   // Por lo tanto, sessionData.parameters ya es la fusión completa.
 
+  let renderedPayloadResponse = {};
+  if (nextStateConfig.payloadResponse) {
+    try {
+      renderedPayloadResponse = processTemplate(nextStateConfig.payloadResponse, currentParameters);
+    } catch (templateError) {
+      console.error(`FSM: Error procesando plantilla para estado ${nextStateId}:`, templateError);
+      // Decidir si devolver el payload sin procesar, uno vacío, o añadir info de error al payload.
+      // Por ahora, devolvemos el payload original si falla el templating.
+      renderedPayloadResponse = nextStateConfig.payloadResponse;
+    }
+  }
+
   return {
     nextStateId: nextStateId,
     currentStateConfig: currentStateConfig, // Estado desde el que se partió para esta transición
     nextStateConfig: nextStateConfig,       // Estado al que se llegó
     parametersToCollect: parametersToCollect,
-    payloadResponse: nextStateConfig.payloadResponse || {}, // Devolver el objeto payloadResponse completo (o vacío si no está definido)
+    payloadResponse: renderedPayloadResponse, // Devolver el payloadResponse procesado
     sessionData: sessionData, // Devuelve el estado completo de la sesión actualizado (con parameters fusionados)
   };
 }

@@ -53,9 +53,9 @@ A continuación, se detalla cada componente principal:
          - `parameters`: (object, opcional) Define los parámetros de información que este estado está diseñado para recolectar o que son relevantes para su procesamiento.
            - `required`: (array de strings, opcional) Una lista de nombres de parámetros que son obligatorios para este estado. La FSM usará esta lista, por ejemplo, para determinar si se puede avanzar a un `defaultNextState` o para construir la lista de `parametersToCollect`.
            - `optional`: (array de strings, opcional) Una lista de nombres de parámetros que pueden ser recolectados en este estado pero no son estrictamente necesarios para su completitud.
-         - `payloadResponse`: (object, opcional) Un objeto de formato libre definido por el usuario. El contenido completo de este objeto se devuelve tal cual a la aplicación cliente cuando la FSM transita a este estado. Esto proporciona una gran flexibilidad, ya que la aplicación cliente puede recibir cualquier estructura de datos que necesite para ese estado particular, como:
+         - `payloadResponse`: (object, opcional) Un objeto de formato libre definido por el usuario. **Los valores de tipo string dentro de este objeto pueden contener placeholders y llamadas a funciones predefinidas que serán procesadas por la FSM antes de devolver la respuesta.** (Ver documentación de `src/templateProcessor.js` para la sintaxis). Esto proporciona una gran flexibilidad, ya que la aplicación cliente puede recibir cualquier estructura de datos que necesite para ese estado particular, como:
            - `apiHooks`: (objeto, por convención) Podría contener sub-objetos o arrays para APIs a ser llamadas en diferentes momentos (`onEnterState`, `afterParametersCollected`, etc.).
-           - `prompts`: (objeto o array) Textos o referencias a audios para mostrar/reproducir al usuario.
+           - `prompts`: (objeto o array) Textos o referencias a audios para mostrar/reproducir al usuario. Los strings aquí serán procesados por el `templateProcessor`.
            - `uiHints`: (objeto) Sugerencias para la interfaz de usuario (ej: tipo de input, botones a mostrar).
            - `tools`: (objeto o array) Herramientas o lógicas específicas que la aplicación cliente debe activar.
          - `transitions`: (array de objects, opcional) Una lista ordenada de posibles transiciones desde el estado actual a otros estados. La FSM las evalúa en el orden en que aparecen. La primera transición cuya condición se cumpla será la que se active.
@@ -186,7 +186,7 @@ A continuación, se detalla cada componente principal:
          - `inputParameters`: (object, opcional) Un objeto con los parámetros recolectados en la interacción actual.
        - **Lógica Detallada**:
          1. Llama a `initializeOrRestoreSession(sessionId)` para obtener los datos de la sesión actual (o inicializar una nueva).
-         2. Fusiona `inputParameters` (de la solicitud actual) con `sessionData.parameters` (los parámetros ya acumulados en la sesión). Los nuevos parámetros tienen precedencia. El resultado se almacena en `currentParameters`.
+         2. Fusiona `inputParameters` (de la solicitud actual) con `sessionData.parameters` (los parámetros ya acumulados en la sesión). Los nuevos parámetros tienen precedencia. El resultado se almacena en `currentParameters` (este objeto `currentParameters` es el que se pasará al `templateProcessor`).
          3. Obtiene la configuración del estado actual (`currentStateConfig`) usando `getStateById(sessionData.currentStateId)`. Si no se encuentra, lanza un error.
          4. **Evaluación de Transiciones** (para determinar `nextStateId`):
             - Inicializa `nextStateId = null` y `matchedTransition = false`.
@@ -205,18 +205,80 @@ A continuación, se detalla cada componente principal:
          7. **Determinación de `parametersToCollect`**:
             - Obtiene los `parameters.required` y `parameters.optional` del `nextStateConfig`.
             - Filtra estos para incluir solo aquellos que *no* están presentes en `currentParameters` (o son nulos/vacíos). El resultado es un objeto `{ required: [...], optional: [...] }`.
-         8. **Construcción de la Respuesta**:
+         8. **Procesamiento del `payloadResponse`**:
+            - Si `nextStateConfig.payloadResponse` existe, se llama a `processTemplate(nextStateConfig.payloadResponse, currentParameters)` (del módulo `templateProcessor`) para realizar la sustitución de placeholders y la ejecución de funciones predefinidas.
+            - El resultado es `renderedPayloadResponse`. Se manejan errores durante este procesamiento, devolviendo el payload original en caso de fallo del templating.
+         9. **Construción de la Respuesta**:
             - Devuelve un objeto con:
               - `nextStateId`: El ID del estado al que se ha transitado.
               - `currentStateConfig`: La configuración del estado desde el que se partió.
               - `nextStateConfig`: La configuración del estado al que se llegó.
               - `parametersToCollect`: El objeto calculado en el paso anterior.
-              - `payloadResponse`: El contenido de `nextStateConfig.payloadResponse` (o `{}` si no está definido).
+              - `payloadResponse`: El `renderedPayloadResponse` (el payload procesado).
               - `sessionData`: El objeto completo de la sesión actualizada, que incluye `currentStateId`, el historial y, crucialmente, `parameters` (que contiene la fusión de todos los parámetros recolectados).
 
-### 7. `src/apiServer.js`
-   - **Propósito**: Este módulo es responsable de exponer la funcionalidad de la FSM a través de una API RESTful utilizando el framework Express. Permite que aplicaciones externas interactúen con la FSM enviando solicitudes HTTP con formato JSON.
+### 7. `src/templateProcessor.js`
+   - **Propósito**: Este módulo es responsable de procesar strings de plantillas, reemplazando placeholders con valores de parámetros, valores de fecha/hora actuales, y ejecutando un conjunto de funciones de transformación predefinidas y seguras.
+   - **Funciones Clave**:
+     - `resolveArgument(arg, parameters)`: Función interna que determina si un argumento para una función de plantilla es un literal o una referencia a un parámetro en `parameters`.
+     - `PREDEFINED_FUNCTIONS`: Objeto que mapea nombres de funciones (ej: `default`, `toUpperCase`, `toLowerCase`, `capitalize`, `formatNumber`, `add`, `subtract`) a sus implementaciones. Estas funciones operan sobre los argumentos resueltos.
+     - `renderString(text, parameters)`:
+       - Procesa un único string.
+       - Realiza sustituciones en orden: primero fecha/hora (`{{current_date}}`, etc.), luego funciones (`{{funcName(arg1, ...)}}`), y finalmente placeholders de parámetros (`{{paramName}}`).
+       - El parser de funciones es básico y utiliza expresiones regulares para extraer el nombre de la función y sus argumentos.
+       - Maneja errores durante la ejecución de funciones predefinidas, devolviendo un string de error.
+     - `processTemplate(template, parameters)`: (Exportada)
+       - Función principal que maneja recursivamente la estructura de la plantilla.
+       - Si la plantilla es un string, llama a `renderString`.
+       - Si es un array, aplica `processTemplate` a cada elemento.
+       - Si es un objeto, aplica `processTemplate` a cada valor de propiedad.
+       - Devuelve la estructura de la plantilla con todos los strings procesados.
+   - **Sintaxis Soportada**:
+     - Placeholders de parámetros: `{{paramName}}` (resuelve a `parameters[paramName]`, o `''` si no existe).
+     - Placeholders de fecha/hora: `{{current_date}}`, `{{current_time}}`, `{{current_datetime}}`.
+     - Funciones predefinidas: `{{funcName(arg1, 'literal', 123, true, paramRef)}}`.
+
+### 8. `src/socketServer.js`
+   - **Propósito**: Este módulo implementa un servidor de sockets de dominio UNIX (UNIX Domain Socket) para permitir la comunicación con la FSM desde otros procesos que se ejecutan en la misma máquina. Ofrece una alternativa de comunicación de baja latencia a la API HTTP para casos de uso locales.
    - **Dependencias**:
+     - `net`: Módulo incorporado de Node.js para la creación de servidores y clientes de red (incluyendo sockets UNIX).
+     - `fs`: Módulo incorporado de Node.js para interactuar con el sistema de archivos (usado para eliminar el archivo de socket).
+   - **Variables Globales del Módulo**:
+     - `server`: Almacena la instancia del servidor `net.Server`.
+   - **Funciones Exportadas**:
+     - `startSocketServer(socketPath, fsmProcessInputCallback)`:
+       - **Propósito**: Crea, configura e inicia el servidor de sockets UNIX.
+       - **Parámetros**:
+         - `socketPath`: (string) La ruta del sistema de archivos donde se creará el socket (ej: `/tmp/fsm.sock`).
+         - `fsmProcessInputCallback`: (function) Una referencia a la función `fsm.processInput` que será llamada para procesar los datos recibidos.
+       - **Lógica**:
+         1. Verifica si `socketPath` está definido; si no, registra un error y no inicia.
+         2. **Limpieza del Socket Antiguo**: Si ya existe un archivo en `socketPath`, intenta eliminarlo usando `fs.unlinkSync()` para prevenir errores `EADDRINUSE`.
+         3. **Creación del Servidor**: Crea una instancia de `net.createServer()`. El callback de creación recibe un objeto `socket` por cada cliente que se conecta.
+         4. **Manejo de Conexión de Cliente (`socket`)**:
+            - `socket.on('data', async (data) => ...)`:
+              - Cuando se reciben datos, los convierte a string.
+              - Intenta parsear la cadena como JSON. Se espera que el cliente envíe un objeto JSON con `sessionId`, `intent` (opcional), y `parameters` (opcional).
+              - Valida que `request.sessionId` exista.
+              - Llama a `fsmProcessInputCallback` (que es `fsm.processInput`) con los datos de la solicitud.
+              - Serializa la respuesta de la FSM a JSON y la escribe de vuelta al socket (`socket.write(JSON.stringify(response) + '\\n')`). Se añade un newline como delimitador simple de mensajes.
+              - **Manejo de Errores (por mensaje)**: Si hay un error al parsear o procesar, envía una respuesta JSON de error al cliente.
+            - `socket.on('end', () => ...)`: Registra cuando un cliente se desconecta.
+            - `socket.on('error', (err) => ...)`: Registra errores específicos del socket de un cliente (evitando loguear `ECONNRESET` que son comunes).
+         5. **Manejo de Errores del Servidor (`server.on('error', ...)`**: Registra errores del propio objeto servidor (ej: `EADDRINUSE`).
+         6. **Inicio de Escucha (`server.listen(socketPath, ...)`**: El servidor comienza a escuchar en la ruta del socket especificada.
+         7. **Limpieza en Salida (`process.on('exit', ...)`**: Registra un manejador para el evento `exit` del proceso para intentar llamar a `stopSocketServer` como un fallback (la limpieza principal la maneja `index.js`).
+     - `stopSocketServer(socketPath)`: (devuelve Promise)
+       - **Propósito**: Cierra ordenadamente el servidor de sockets y elimina el archivo de socket del sistema de archivos.
+       - **Lógica**:
+         1. Si el `server` existe, llama a `server.close()`.
+         2. En el callback de `server.close()`, o si el servidor no estaba definido pero `socketPath` sí, intenta eliminar el archivo de socket de `socketPath` usando `fs.unlinkSync()`.
+         3. Resetea la variable `server` a `null`.
+         4. Devuelve una promesa que se resuelve cuando el proceso de cierre ha terminado.
+
+### 8. `src/apiServer.js`
+    - **Propósito**: Este módulo es responsable de exponer la funcionalidad de la FSM a través de una API RESTful utilizando el framework Express. Permite que aplicaciones externas interactúen con la FSM enviando solicitudes HTTP con formato JSON.
+    - **Dependencias**:
      - `express`: Para la creación del servidor y manejo de rutas.
      - `src/fsm`: Para acceder a la lógica de procesamiento de la FSM.
      - `src/configLoader`: Para cargar la configuración de estados al inicio (aunque `fsm.js` también lo hace, es una buena práctica asegurar la carga temprana).
@@ -306,4 +368,4 @@ A continuación, se detalla cada componente principal:
    - **Exportaciones**: Exporta `connectAri` y `closeAri`.
 
 ---
-*Este documento se irá poblando en los siguientes pasos.*
+*Fin del documento.*
