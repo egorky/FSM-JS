@@ -43,6 +43,9 @@ app.post('/fsm/:sessionId', async (req, res) => {
       console.log("API Response Body (async log):\n", JSON.stringify(responseObject, null, 2));
     });
 
+    console.log("API SERVER DEBUG: result.sessionData.parameters from FSM (inside apiServer.js):\n", JSON.stringify(result.sessionData.parameters, null, 2));
+    console.log("API SERVER DEBUG: result.parametersToCollect from FSM (inside apiServer.js):\n", JSON.stringify(result.parametersToCollect, null, 2));
+
   } catch (error) {
     console.error(`Error procesando FSM para session ${sessionId}:`, error);
     if (error.message.includes('Configuración no encontrada') || error.message.includes('no existe en la definición de \'states\'')) {

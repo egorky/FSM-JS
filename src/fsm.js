@@ -51,11 +51,19 @@ async function processInput(sessionId, intent, inputParameters = {}) {
   const sessionKey = `${FSM_SESSION_PREFIX}${sessionId}`;
   let sessionData = await initializeOrRestoreSession(sessionId);
   let currentStateId = sessionData.currentStateId;
+
+  console.log("FSM DEBUG: Initial sessionData.parameters:\n", JSON.stringify(sessionData.parameters, null, 2));
+  console.log("FSM DEBUG: inputParameters:\n", JSON.stringify(inputParameters, null, 2));
+
   let currentParameters = { ...sessionData.parameters, ...inputParameters }; // Merge con nuevos parámetros
+  console.log("FSM DEBUG: currentParameters (merged):\n", JSON.stringify(currentParameters, null, 2));
 
   const currentStateConfig = getStateById(currentStateId);
   if (!currentStateConfig) {
     throw new Error(`Configuración no encontrada para el estado: ${currentStateId}`);
+  }
+  if (currentStateConfig.parameters?.required) {
+    console.log("FSM DEBUG: currentStateConfig required parameters:\n", JSON.stringify(currentStateConfig.parameters.required, null, 2));
   }
 
   let nextStateId = null;
@@ -118,6 +126,7 @@ async function processInput(sessionId, intent, inputParameters = {}) {
     sessionData.history.push(nextStateId);
   }
 
+  console.log("FSM DEBUG: sessionData.parameters before saving to Redis:\n", JSON.stringify(sessionData.parameters, null, 2));
   const sessionTTL = parseInt(process.env.REDIS_SESSION_TTL, 10);
   if (sessionTTL && sessionTTL > 0) {
     await redisClient.set(sessionKey, JSON.stringify(sessionData), 'EX', sessionTTL);
@@ -152,6 +161,7 @@ async function processInput(sessionId, intent, inputParameters = {}) {
 
   let renderedPayloadResponse = {};
   if (nextStateConfig.payloadResponse) {
+    console.log("FSM DEBUG: Parameters passed to templateProcessor:\n", JSON.stringify(currentParameters, null, 2));
     try {
       renderedPayloadResponse = processTemplate(nextStateConfig.payloadResponse, currentParameters);
     } catch (templateError) {
@@ -161,6 +171,9 @@ async function processInput(sessionId, intent, inputParameters = {}) {
       renderedPayloadResponse = nextStateConfig.payloadResponse;
     }
   }
+
+  console.log("FSM DEBUG: Final sessionData.parameters in returned object:\n", JSON.stringify(sessionData.parameters, null, 2));
+  console.log("FSM DEBUG: Final parametersToCollect:\n", JSON.stringify(parametersToCollect, null, 2));
 
   return {
     nextStateId: nextStateId,
