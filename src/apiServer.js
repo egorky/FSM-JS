@@ -17,7 +17,11 @@ app.post('/fsm/:sessionId', async (req, res) => {
   }
 
   console.log(`API Request: POST /fsm/${sessionId}`);
-  console.log("API Request Body:\n", JSON.stringify(req.body, null, 2));
+  // Clonar req.body para logging diferido seguro
+  const requestBodyForLog = { ...req.body };
+  process.nextTick(() => {
+    console.log("API Request Body (async log):\n", JSON.stringify(requestBodyForLog, null, 2));
+  });
 
   try {
     const result = await fsm.processInput(sessionId, intent, parameters);
@@ -31,8 +35,13 @@ app.post('/fsm/:sessionId', async (req, res) => {
       collectedParameters: result.sessionData.parameters,
     };
 
-    console.log("API Response Body:\n", JSON.stringify(responseObject, null, 2));
+    // Enviar respuesta inmediatamente
     res.json(responseObject);
+
+    // Loguear la respuesta de forma diferida
+    process.nextTick(() => {
+      console.log("API Response Body (async log):\n", JSON.stringify(responseObject, null, 2));
+    });
 
   } catch (error) {
     console.error(`Error procesando FSM para session ${sessionId}:`, error);

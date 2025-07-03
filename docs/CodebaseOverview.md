@@ -260,12 +260,12 @@ A continuación, se detalla cada componente principal:
             - `socket.on('data', async (data) => ...)`:
               - Cuando se reciben datos, los convierte a string.
               - Intenta parsear la cadena como JSON. Se espera que el cliente envíe un objeto JSON con `sessionId`, `intent` (opcional), y `parameters` (opcional).
-              - **Logging**: Registra el JSON de solicitud parseado en formato "pretty print".
+              - **Logging (Diferido)**: Registra el JSON de solicitud parseado en formato "pretty print" usando `process.nextTick()` para no bloquear.
               - Valida que `request.sessionId` exista.
               - Llama a `fsmProcessInputCallback` (que es `fsm.processInput`) con los datos de la solicitud.
-              - **Logging**: Registra la respuesta JSON de la FSM (antes de enviarla) en formato "pretty print".
-              - Serializa la respuesta de la FSM a JSON y la escribe de vuelta al socket (`socket.write(JSON.stringify(response) + '\\n')`). Se añade un newline como delimitador simple de mensajes.
-              - **Manejo de Errores (por mensaje)**: Si hay un error al parsear o procesar, construye una respuesta JSON de error, la registra en "pretty print" y la envía al cliente.
+              - Serializa la respuesta de la FSM a JSON y la escribe de vuelta al socket (`socket.write(JSON.stringify(response) + '\\n')`). Se añade un newline como delimitador simple de mensajes. La respuesta se envía inmediatamente.
+              - **Logging (Diferido)**: Registra la respuesta JSON de la FSM (después de enviarla) en formato "pretty print" usando `process.nextTick()`.
+              - **Manejo de Errores (por mensaje)**: Si hay un error al parsear o procesar, construye una respuesta JSON de error, la envía al cliente, y luego la registra en "pretty print" de forma diferida.
             - `socket.on('end', () => ...)`: Registra cuando un cliente se desconecta.
             - `socket.on('error', (err) => ...)`: Registra errores específicos del socket de un cliente (evitando loguear `ECONNRESET` que son comunes).
          5. **Manejo de Errores del Servidor (`server.on('error', ...)`**: Registra errores del propio objeto servidor (ej: `EADDRINUSE`).
@@ -301,18 +301,12 @@ A continuación, se detalla cada componente principal:
        - **Cuerpo de la Solicitud (JSON)**: Espera un objeto con `intent` (opcional) y `parameters` (opcional, objeto).
        - **Lógica**:
          1. Extrae `sessionId` de `req.params` y `intent`, `parameters` de `req.body`.
-         2. **Logging**: Registra la URL de la solicitud y el cuerpo JSON de entrada (`req.body`) en formato "pretty print".
+         2. **Logging (Diferido)**: Registra la URL de la solicitud y el cuerpo JSON de entrada (`req.body`) en formato "pretty print" usando `process.nextTick()` para no bloquear la respuesta.
          3. Valida que `sessionId` esté presente; si no, responde con un error 400.
          4. Llama a `fsm.processInput(sessionId, intent, parameters)` para que el motor FSM procese la solicitud.
-         5. Construye un `responseObject` con los datos devueltos por `fsm.processInput()`:
-            - `sessionId`
-            - `currentStateId` (del `result.sessionData`)
-            - `nextStateId` (del `result.nextStateId`)
-            - `parametersToCollect` (del `result.parametersToCollect`)
-            - `payloadResponse` (del `result.payloadResponse`)
-            - `collectedParameters` (del `result.sessionData.parameters`, que ya contiene la fusión completa)
-         6. **Logging**: Registra el `responseObject` (JSON de salida) en formato "pretty print".
-         7. Envía `responseObject` al cliente.
+         5. Construye un `responseObject` con los datos devueltos por `fsm.processInput()`.
+         6. Envía `responseObject` al cliente inmediatamente.
+         7. **Logging (Diferido)**: Registra el `responseObject` (JSON de salida) en formato "pretty print" usando `process.nextTick()`.
          8. **Manejo de Errores**:
             - Captura errores de `fsm.processInput()`.
             - Si el error es por configuración no encontrada o estado no existente, responde con un 404.

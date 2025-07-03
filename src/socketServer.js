@@ -40,8 +40,11 @@ function startSocketServer(socketPath, fsmProcessInputCallback) {
       try {
         const request = JSON.parse(message);
         RsessionId = request.sessionId; // Guardar para logging
-        console.log("Socket Request JSON:\n", JSON.stringify(request, null, 2));
 
+        const capturedRequest = { ...request }; // Clonar para log diferido
+        process.nextTick(() => {
+          console.log("Socket Request JSON (async log):\n", JSON.stringify(capturedRequest, null, 2));
+        });
 
         if (!request.sessionId) {
           throw new Error('sessionId es requerido en la solicitud del socket.');
@@ -52,20 +55,34 @@ function startSocketServer(socketPath, fsmProcessInputCallback) {
           request.intent,
           request.parameters
         );
-        console.log("Socket Response JSON:\n", JSON.stringify(fsmResponse, null, 2));
-        socket.write(JSON.stringify(fsmResponse) + '\n'); // Añadir newline como delimitador simple
+
+        // Enviar respuesta inmediatamente
+        socket.write(JSON.stringify(fsmResponse) + '\n');
+
+        // Loguear respuesta de forma diferida
+        const capturedResponse = { ...fsmResponse }; // Clonar por si acaso
+        process.nextTick(() => {
+          console.log("Socket Response JSON (async log):\n", JSON.stringify(capturedResponse, null, 2));
+        });
+
       } catch (error) {
         console.error(`Socket Server: Error procesando mensaje para sessionId ${RsessionId || 'desconocido'} (mensaje original: ${message.substring(0,100)}...):`, error.message);
         const errorResponse = {
           error: error.message,
           // details: error.stack, // Omitir stack en producción o hacerlo condicional
         };
-        console.log("Socket Error Response JSON:\n", JSON.stringify(errorResponse, null, 2));
+
+        // Intentar enviar error inmediatamente
         try {
           socket.write(JSON.stringify(errorResponse) + '\n');
         } catch (writeError) {
             console.error('Socket Server: Error escribiendo respuesta de error al socket:', writeError);
         }
+
+        // Loguear error de forma diferida
+        process.nextTick(() => {
+          console.log("Socket Error Response JSON (async log):\n", JSON.stringify(errorResponse, null, 2));
+        });
       }
     });
 
