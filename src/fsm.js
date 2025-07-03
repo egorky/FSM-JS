@@ -22,7 +22,15 @@ async function initializeOrRestoreSession(sessionId) {
       parameters: {}, // Parámetros recolectados
       history: [initialStateId], // Historial de estados visitados
     };
-    await redisClient.set(sessionKey, JSON.stringify(initialSession));
+    // Aplicar TTL también a la sesión inicial
+    const sessionTTL = parseInt(process.env.REDIS_SESSION_TTL, 10);
+    if (sessionTTL && sessionTTL > 0) {
+      await redisClient.set(sessionKey, JSON.stringify(initialSession), 'EX', sessionTTL);
+      console.log(`FSM initial session ${sessionId} saved to Redis with TTL: ${sessionTTL}s`);
+    } else {
+      await redisClient.set(sessionKey, JSON.stringify(initialSession));
+      console.log(`FSM initial session ${sessionId} saved to Redis without TTL.`);
+    }
     return initialSession;
   }
 }
@@ -108,7 +116,15 @@ async function processInput(sessionId, intent, inputParameters = {}) {
   if (nextStateId !== currentStateId) {
     sessionData.history.push(nextStateId);
   }
-  await redisClient.set(sessionKey, JSON.stringify(sessionData));
+
+  const sessionTTL = parseInt(process.env.REDIS_SESSION_TTL, 10);
+  if (sessionTTL && sessionTTL > 0) {
+    await redisClient.set(sessionKey, JSON.stringify(sessionData), 'EX', sessionTTL);
+    console.log(`FSM session ${sessionId} saved to Redis with TTL: ${sessionTTL}s`);
+  } else {
+    await redisClient.set(sessionKey, JSON.stringify(sessionData));
+    console.log(`FSM session ${sessionId} saved to Redis without TTL.`);
+  }
 
   const nextStateConfig = getStateById(nextStateId);
   if (!nextStateConfig) {

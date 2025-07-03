@@ -60,6 +60,7 @@ Cuando una interacción ocurre (ya sea una solicitud API o un evento en una llam
     *   `ENABLE_ARI`: Controla si se inicia la conexión ARI (`true` por defecto).
     *   `PORT`: Puerto para el servidor API (defecto: 3000, relevante si `ENABLE_API="true"`).
     *   `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`: Para la conexión a Redis.
+    *   `REDIS_SESSION_TTL`: Tiempo de vida (en segundos) para las sesiones en Redis (ej: 3600 para 1 hora; 0 o vacío para sin expiración).
     *   `ARI_APP_NAME`, `ARI_USERNAME`, `ARI_PASSWORD`, `ARI_URL`: Para la conexión ARI (relevante si `ENABLE_ARI="true"`).
 
 Para ejecutar (asumiendo que las dependencias están instaladas y los servicios configurados):
@@ -67,6 +68,10 @@ Para ejecutar (asumiendo que las dependencias están instaladas y los servicios 
 ```bash
 npm start
 ```
+
+## Documentación Detallada del Código
+
+Para una explicación más profunda de cada archivo, módulo y función principal, consulta el documento [docs/CodebaseOverview.md](docs/CodebaseOverview.md).
 
 ## Nota Importante
 

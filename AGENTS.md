@@ -55,10 +55,11 @@ El proyecto está organizado de la siguiente manera:
 *   **Variables de Entorno**:
     *   El proyecto ahora utiliza la librería `dotenv` para cargar automáticamente las variables de entorno desde un archivo `.env` ubicado en la raíz del proyecto.
     *   Se proporciona un archivo `.env.example` como plantilla. Los desarrolladores deben copiar este archivo a `.env` y ajustar los valores para su entorno local. `dotenv` ha sido añadido como una dependencia en `package.json`.
-    *   Variables clave incluyen `ENABLE_API` y `ENABLE_ARI` para activar/desactivar los respectivos módulos.
+    *   Variables clave incluyen `ENABLE_API`, `ENABLE_ARI` y `REDIS_SESSION_TTL`.
     *   Otras variables configuran la conexión a Redis (`REDIS_HOST`, `REDIS_PORT`, etc.) y Asterisk ARI (`ARI_URL`, `ARI_APP_NAME`, etc.).
     *   Consulta `.env.example` para la lista completa. `src/index.js` carga estas variables al inicio.
-*   **Manejo de Sesiones**: Las sesiones de la FSM se identifican por un `sessionId` y se persisten en Redis. El `sessionId` es proporcionado en la URL para la API y es el ID del canal para ARI.
+*   **Manejo de Sesiones**: Las sesiones de la FSM se identifican por un `sessionId` y se persisten en Redis, con un TTL configurable mediante `REDIS_SESSION_TTL`. El `sessionId` es proporcionado en la URL para la API y es el ID del canal para ARI.
+*   **Documentación Detallada del Código**: Para una comprensión profunda de cada módulo, consulta [docs/CodebaseOverview.md](docs/CodebaseOverview.md).
 
 ## Cómo Ejecutar (con `.env`)
 
