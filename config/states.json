@@ -8,29 +8,27 @@
         "required": ["patient_age"],
         "optional": ["caller_name"]
       },
-      "apiHooks": {
-        "onEnterState": ["api_log_interaction_start"],
-        "beforeCollectingParameters": ["api_fetch_age_prompt_variations"],
-        "afterParametersCollected": ["api_check_age_eligibility", "api_log_age_provided"]
+      "payloadResponse": {
+        "customInstructions": "Greet the user warmly and ask for their age.",
+        "uiHints": { "ageInputType": "number" },
+        "apiHooks": {
+          "onEnterState": ["api_log_interaction_start"],
+          "beforeCollectingParameters": ["api_fetch_age_prompt_variations"],
+          "afterParametersCollected": ["api_check_age_eligibility", "api_log_age_provided"]
+        }
       },
       "transitions": [
         {
           "nextState": "2_get_patient_id",
-          "condition": {
-            "allParametersMet": true
-          }
+          "condition": { "allParametersMet": true }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent"
-          }
+          "condition": { "intent": "request_human_agent" }
         },
         {
           "nextState": "98_age_ineligible",
-          "condition": {
-            "intent": "age_ineligible_system_detected"
-          }
+          "condition": { "intent": "age_ineligible_system_detected" }
         }
       ],
       "defaultNextState": "2_get_patient_id"
@@ -42,29 +40,29 @@
         "required": ["patient_id_number"],
         "optional": ["id_document_type"]
       },
-      "apiHooks": {
-        "onEnterState": ["api_log_enter_get_id_state"],
-        "beforeCollectingParameters": ["api_verify_id_prerequisites", "api_get_id_input_instructions"],
-        "afterParametersCollected": ["api_validate_id_format", "api_log_id_provided"]
+      "payloadResponse": {
+        "prompts": {
+          "main": "Por favor, ingrese su número de identificación.",
+          "validationExample": "El formato debe ser XXXXXXXXXX."
+        },
+        "apiHooks": {
+          "onEnterState": ["api_log_enter_get_id_state"],
+          "beforeCollectingParameters": ["api_verify_id_prerequisites", "api_get_id_input_instructions"],
+          "afterParametersCollected": ["api_validate_id_format", "api_log_id_provided"]
+        }
       },
       "transitions": [
         {
           "nextState": "3_get_specialty",
-          "condition": {
-            "allParametersMet": true
-          }
+          "condition": { "allParametersMet": true }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent"
-          }
+          "condition": { "intent": "request_human_agent" }
         },
         {
           "nextState": "2_get_patient_id_retry_invalid",
-          "condition": {
-            "intent": "id_invalid_system_detected"
-          }
+          "condition": { "intent": "id_invalid_system_detected" }
         }
       ],
       "defaultNextState": "3_get_specialty"
@@ -75,23 +73,23 @@
       "parameters": {
         "required": ["medical_specialty"]
       },
-      "apiHooks": {
-        "onEnterState": ["api_fetch_available_specialties"],
-        "beforeCollectingParameters": [],
-        "afterParametersCollected": ["api_validate_chosen_specialty"]
+      "payloadResponse": {
+        "availableSpecialtiesSource": "dynamic_via_onEnter_api",
+        "apiHooks": {
+          "onEnterState": ["api_fetch_available_specialties"],
+          "beforeCollectingParameters": [],
+          "afterParametersCollected": ["api_validate_chosen_specialty"]
+        },
+        "tools": { "specialtySelector": "dropdown" }
       },
       "transitions": [
         {
           "nextState": "4_get_office_preference",
-          "condition": {
-            "allParametersMet": true
-          }
+          "condition": { "allParametersMet": true }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent"
-          }
+          "condition": { "intent": "request_human_agent" }
         }
       ],
       "defaultNextState": "4_get_office_preference"
@@ -102,23 +100,20 @@
       "parameters": {
         "optional": ["preferred_office_id", "wants_nearest_office"]
       },
-      "apiHooks": {
-        "onEnterState": ["api_fetch_offices_for_specialty"],
-        "beforeCollectingParameters": [],
-        "afterParametersCollected": ["api_log_office_preference"]
+      "payloadResponse": {
+        "apiHooks": {
+          "onEnterState": ["api_fetch_offices_for_specialty"],
+          "afterParametersCollected": ["api_log_office_preference"]
+        }
       },
       "transitions": [
         {
           "nextState": "5_get_appointment_day",
-          "condition": {
-            "allParametersMet": true
-          }
+          "condition": { "allParametersMet": true }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent"
-          }
+          "condition": { "intent": "request_human_agent" }
         }
       ],
       "defaultNextState": "5_get_appointment_day"
@@ -129,23 +124,21 @@
       "parameters": {
         "required": ["appointment_date"]
       },
-      "apiHooks": {
-        "onEnterState": [],
-        "beforeCollectingParameters": ["api_check_doctor_availability_for_day_precheck"],
-        "afterParametersCollected": ["api_validate_date_format", "api_check_doctor_availability_for_day_final"]
+      "payloadResponse": {
+        "uiHints": { "datePickerFormat": "YYYY-MM-DD" },
+        "apiHooks": {
+          "beforeCollectingParameters": ["api_check_doctor_availability_for_day_precheck"],
+          "afterParametersCollected": ["api_validate_date_format", "api_check_doctor_availability_for_day_final"]
+        }
       },
       "transitions": [
         {
           "nextState": "6_get_appointment_time",
-          "condition": {
-            "allParametersMet": true
-          }
+          "condition": { "allParametersMet": true }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent"
-          }
+          "condition": { "intent": "request_human_agent" }
         }
       ],
       "defaultNextState": "6_get_appointment_time"
@@ -156,30 +149,24 @@
       "parameters": {
         "required": ["appointment_time"]
       },
-      "apiHooks": {
-        "onEnterState": ["api_fetch_available_slots_for_day"],
-        "beforeCollectingParameters": [],
-        "afterParametersCollected": ["api_book_appointment_slot"]
+      "payloadResponse": {
+        "apiHooks": {
+          "onEnterState": ["api_fetch_available_slots_for_day"],
+          "afterParametersCollected": ["api_book_appointment_slot"]
+        }
       },
       "transitions": [
         {
           "nextState": "7_confirmation_and_closing",
-          "condition": {
-            "allParametersMet": true,
-            "intent": "appointment_booked_success"
-          }
+          "condition": { "allParametersMet": true, "intent": "appointment_booked_success" }
         },
         {
           "nextState": "6_retry_appointment_time",
-          "condition": {
-            "intent": "appointment_slot_unavailable"
-          }
+          "condition": { "intent": "appointment_slot_unavailable" }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent"
-          }
+          "condition": { "intent": "request_human_agent" }
         }
       ]
     },
@@ -187,30 +174,33 @@
       "id": "7_confirmation_and_closing",
       "description": "Confirmar todos los detalles de la cita agendada y despedirse.",
       "parameters": {},
-      "apiHooks": {
-        "onEnterState": ["api_send_confirmation_message", "api_log_interaction_complete"],
-        "beforeCollectingParameters": [],
-        "afterParametersCollected": []
+      "payloadResponse": {
+        "finalMessage": "Su cita ha sido confirmada. ¡Gracias!",
+        "apiHooks": {
+          "onEnterState": ["api_send_confirmation_message", "api_log_interaction_complete"]
+        }
       },
       "transitions": []
     },
     "98_age_ineligible": {
       "id": "98_age_ineligible",
       "description": "Informar al usuario que no es elegible por edad y finalizar.",
-      "apiHooks": {
-        "onEnterState": ["api_log_ineligible_interaction", "api_send_age_ineligible_notification"],
-        "beforeCollectingParameters": [],
-        "afterParametersCollected": []
+      "payloadResponse": {
+        "messageToUser": "Lo sentimos, no cumple con el requisito de edad para este servicio.",
+        "apiHooks": {
+          "onEnterState": ["api_log_ineligible_interaction", "api_send_age_ineligible_notification"]
+        }
       },
       "transitions": []
     },
     "99_transfer_to_human": {
       "id": "99_transfer_to_human",
       "description": "Transferir la conversación a un agente humano.",
-      "apiHooks": {
-        "onEnterState": ["api_initiate_transfer_to_human_agent", "api_log_transfer_request"],
-        "beforeCollectingParameters": [],
-        "afterParametersCollected": []
+      "payloadResponse": {
+        "transferMessage": "Un momento, por favor, lo transferiré con un agente.",
+        "apiHooks": {
+          "onEnterState": ["api_initiate_transfer_to_human_agent", "api_log_transfer_request"]
+        }
       },
       "transitions": []
     },
@@ -221,23 +211,22 @@
          "required": ["patient_id_number"],
          "optional": ["id_document_type"]
       },
-      "apiHooks": {
-        "onEnterState": ["api_log_id_retry_event"],
-        "beforeCollectingParameters": ["api_get_id_input_retry_instructions"],
-        "afterParametersCollected": ["api_validate_id_format", "api_log_id_provided_after_retry"]
+      "payloadResponse": {
+        "retryPrompt": "El número de identificación ingresado no es válido. Por favor, inténtelo de nuevo.",
+        "apiHooks": {
+          "onEnterState": ["api_log_id_retry_event"],
+          "beforeCollectingParameters": ["api_get_id_input_retry_instructions"],
+          "afterParametersCollected": ["api_validate_id_format", "api_log_id_provided_after_retry"]
+        }
       },
       "transitions": [
         {
           "nextState": "3_get_specialty",
-          "condition": {
-            "allParametersMet": true
-          }
+          "condition": { "allParametersMet": true }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent_after_max_retries"
-          }
+          "condition": { "intent": "request_human_agent_after_max_retries" }
         }
       ],
       "defaultNextState": "3_get_specialty"
@@ -248,30 +237,25 @@
       "parameters": {
         "required": ["appointment_time"]
       },
-      "apiHooks": {
-        "onEnterState": ["api_log_time_retry_event", "api_fetch_alternative_slots"],
-        "beforeCollectingParameters": [],
-        "afterParametersCollected": ["api_book_appointment_slot"]
+      "payloadResponse": {
+        "unavailablePrompt": "La hora seleccionada ya no está disponible. Por favor, elija otra hora.",
+        "apiHooks": {
+          "onEnterState": ["api_log_time_retry_event", "api_fetch_alternative_slots"],
+          "afterParametersCollected": ["api_book_appointment_slot"]
+        }
       },
       "transitions": [
          {
           "nextState": "7_confirmation_and_closing",
-          "condition": {
-            "allParametersMet": true,
-            "intent": "appointment_booked_success"
-          }
+          "condition": { "allParametersMet": true, "intent": "appointment_booked_success" }
         },
         {
           "nextState": "6_retry_appointment_time",
-          "condition": {
-            "intent": "appointment_slot_unavailable"
-          }
+          "condition": { "intent": "appointment_slot_unavailable" }
         },
         {
           "nextState": "99_transfer_to_human",
-          "condition": {
-            "intent": "request_human_agent"
-          }
+          "condition": { "intent": "request_human_agent" }
         }
       ]
     }

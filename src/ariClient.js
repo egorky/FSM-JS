@@ -35,26 +35,32 @@ async function handleStasisStart(event, channel) {
     // Esto es un esqueleto y necesitará ser expandido enormemente.
     // Por ejemplo, reproducir un audio, esperar DTMF, etc.
 
-    // 1. Devolver APIs a llamar (esto es informativo para el sistema externo)
-    // Ahora usamos apiHooks. Para ARI, la forma de actuar sobre estos hooks puede variar.
-    // Por simplicidad, podríamos loguear las APIs del hook 'onEnterState' o todas.
-    if (currentFsmState.apiHooks && Object.keys(currentFsmState.apiHooks).length > 0) {
-      console.log(`ARI: Para el estado ${currentFsmState.nextStateId}, se definieron los siguientes apiHooks:`);
-      for (const hookName in currentFsmState.apiHooks) {
-        if (currentFsmState.apiHooks[hookName] && currentFsmState.apiHooks[hookName].length > 0) {
-          console.log(`  Hook '${hookName}': ${currentFsmState.apiHooks[hookName].join(', ')}`);
+    // 1. Procesar el payloadResponse devuelto por la FSM.
+    // Para ARI, el contenido de payloadResponse necesitará ser interpretado
+    // para realizar acciones de llamada (reproducir audios, etc.).
+    if (currentFsmState.payloadResponse && Object.keys(currentFsmState.payloadResponse).length > 0) {
+      console.log(`ARI: Para el estado ${currentFsmState.nextStateId}, se recibió el siguiente payloadResponse:`);
+      console.log(JSON.stringify(currentFsmState.payloadResponse, null, 2)); // Loguear el payload completo
+
+      // Ejemplo de cómo se podría buscar una clave específica dentro de payloadResponse,
+      // como los antiguos 'apiHooks' si se mantiene esa sub-estructura, o 'prompts'.
+      if (currentFsmState.payloadResponse.apiHooks) {
+        const onEnterApis = currentFsmState.payloadResponse.apiHooks.onEnterState;
+        if (onEnterApis && onEnterApis.length > 0) {
+          console.log(`ARI: (Dentro de payloadResponse) Hook 'onEnterState' APIs: ${onEnterApis.join(', ')}`);
+          // await channel.setChannelVar({ variable: 'ON_ENTER_APIS', value: onEnterApis.join(',') });
         }
       }
-      // Ejemplo de cómo se podría actuar específicamente sobre un hook, como 'onEnterState':
-      const onEnterApis = currentFsmState.apiHooks.onEnterState;
-      if (onEnterApis && onEnterApis.length > 0) {
-        console.log(`ARI: Específicamente, para 'onEnterState' del estado ${currentFsmState.nextStateId}, APIs: ${onEnterApis.join(', ')}`);
-        // Aquí se podrían setear variables de canal si el Dialplan necesita esta info para onEnterState.
-        // await channel.setChannelVar({ variable: 'ON_ENTER_APIS', value: onEnterApis.join(',') });
+      if (currentFsmState.payloadResponse.prompts && currentFsmState.payloadResponse.prompts.main) {
+        console.log(`ARI: (Dentro de payloadResponse) Prompt principal: ${currentFsmState.payloadResponse.prompts.main}`);
+        // Ejemplo de acción ARI: reproducir este prompt (requiere que el prompt sea un archivo de sonido válido o use TTS)
+        // try {
+        //   await channel.play({ media: `sound:${currentFsmState.payloadResponse.prompts.main}` });
+        // } catch (playError) {
+        //   console.error(`ARI: Error al intentar reproducir prompt: ${playError}`);
+        // }
       }
-      // La aplicación externa o el dialplan necesitarían una lógica más sofisticada
-      // para manejar los diferentes hooks (onEnterState, beforeCollectingParameters, etc.)
-      // en el contexto de una llamada de voz. Por ahora, la FSM los provee.
+      // La lógica real para actuar sobre el payloadResponse en ARI será específica de la aplicación.
     }
 
     // 2. Determinar qué preguntar o qué hacer basándose en `parametersToCollect`

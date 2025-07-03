@@ -126,13 +126,20 @@ async function processInput(sessionId, intent, inputParameters = {}) {
       optional: optionalForNext.filter(p => !currentParameters.hasOwnProperty(p) || currentParameters[p] === null || currentParameters[p] === '')
   };
 
+  // Aseguramos que currentParameters (que se guarda en sessionData.parameters)
+  // es la fusión de lo que había en sesión + lo que acaba de llegar.
+  // Esta lógica ya estaba al principio de la función:
+  // let currentParameters = { ...sessionData.parameters, ...inputParameters };
+  // Y sessionData.parameters = currentParameters; se hace antes de guardar.
+  // Por lo tanto, sessionData.parameters ya es la fusión completa.
+
   return {
     nextStateId: nextStateId,
     currentStateConfig: currentStateConfig, // Estado desde el que se partió para esta transición
     nextStateConfig: nextStateConfig,       // Estado al que se llegó
     parametersToCollect: parametersToCollect,
-    apiHooks: nextStateConfig.apiHooks || {}, // Devolver el objeto apiHooks completo (o vacío si no está definido)
-    sessionData: sessionData, // Devuelve el estado completo de la sesión actualizado
+    payloadResponse: nextStateConfig.payloadResponse || {}, // Devolver el objeto payloadResponse completo (o vacío si no está definido)
+    sessionData: sessionData, // Devuelve el estado completo de la sesión actualizado (con parameters fusionados)
   };
 }
 

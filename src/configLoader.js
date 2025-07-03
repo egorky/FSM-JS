@@ -33,25 +33,24 @@ function loadStateConfig() {
         throw new Error(`El 'initialState' ("${stateConfiguration.initialState}") no existe en la definición de 'states'.`);
     }
 
-    // Validación adicional para la nueva estructura apiHooks
+    // Validación para la nueva estructura payloadResponse
     for (const stateId in stateConfiguration.states) {
       const state = stateConfiguration.states[stateId];
-      if (state.apiHooks && typeof state.apiHooks !== 'object') {
-        throw new Error(`El estado "${stateId}" tiene un campo 'apiHooks' que no es un objeto.`);
+      if (state.payloadResponse && typeof state.payloadResponse !== 'object') {
+        // Permitimos que payloadResponse no exista, pero si existe, debe ser un objeto.
+        throw new Error(`El estado "${stateId}" tiene un campo 'payloadResponse' que no es un objeto.`);
       }
-      if (state.apiHooks) {
-        for (const hookName in state.apiHooks) {
-          if (!Array.isArray(state.apiHooks[hookName])) {
-            throw new Error(`En el estado "${stateId}", el hook "${hookName}" dentro de 'apiHooks' debe ser un array.`);
-          }
-          if (!state.apiHooks[hookName].every(apiName => typeof apiName === 'string')) {
-            throw new Error(`En el estado "${stateId}", el hook "${hookName}" dentro de 'apiHooks' debe contener solo strings (IDs de API).`);
-          }
-        }
+      // Eliminamos la validación específica de 'apiHooks' y 'apisToCall'
+      // ya que 'payloadResponse' es de formato libre y puede o no contener 'apiHooks'.
+      // Si se quiere validar 'apiHooks' dentro de 'payloadResponse', se haría aquí de forma anidada.
+      // Por ahora, solo validamos que payloadResponse sea un objeto si existe.
+
+      // Limpieza de campos obsoletos si aún estuvieran por error
+      if (state.hasOwnProperty('apiHooks')) {
+        console.warn(`ADVERTENCIA: El estado "${stateId}" contiene un campo 'apiHooks' obsoleto fuera de 'payloadResponse'. Será ignorado. Considere moverlo dentro de 'payloadResponse'.`);
       }
-      // También nos aseguramos de que el antiguo apisToCall ya no exista, para evitar confusiones
       if (state.hasOwnProperty('apisToCall')) {
-        throw new Error(`El estado "${stateId}" todavía contiene el antiguo campo 'apisToCall'. Debe ser reemplazado por 'apiHooks'.`);
+        console.warn(`ADVERTENCIA: El estado "${stateId}" contiene un campo 'apisToCall' obsoleto. Será ignorado.`);
       }
     }
 

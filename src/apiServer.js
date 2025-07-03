@@ -29,8 +29,8 @@ app.post('/fsm/:sessionId', async (req, res) => {
       currentStateId: result.sessionData.currentStateId, // El estado después del procesamiento
       nextStateId: result.nextStateId, // Alias para claridad, es el mismo que currentStateId en sessionData
       parametersToCollect: result.parametersToCollect,
-      apiHooks: result.apiHooks, // Usar la nueva estructura apiHooks
-      collectedParameters: result.sessionData.parameters, // Todos los parámetros acumulados
+      payloadResponse: result.payloadResponse, // Usar la nueva estructura payloadResponse
+      collectedParameters: result.sessionData.parameters, // Todos los parámetros acumulados (ya fusionados en fsm.js)
       // Opcional: podrías devolver más detalles del estado si es útil para el cliente
       // nextStateDescription: result.nextStateConfig.description
     });
