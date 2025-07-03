@@ -10,6 +10,11 @@ const PORT = process.env.PORT || 3000;
 // Endpoint para procesar la lógica de la FSM
 app.post('/fsm/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
+
+  // Loguear el req.body crudo y el content-type inmediatamente
+  console.log("API SERVER RAW req.body:", req.body);
+  console.log("API SERVER req.headers['content-type']:", req.headers['content-type']);
+
   const { intent, parameters } = req.body;
 
   if (!sessionId) {
