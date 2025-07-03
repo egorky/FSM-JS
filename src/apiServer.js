@@ -16,24 +16,23 @@ app.post('/fsm/:sessionId', async (req, res) => {
     return res.status(400).json({ error: 'sessionId es requerido en la URL.' });
   }
 
+  console.log(`API Request: POST /fsm/${sessionId}`);
+  console.log("API Request Body:\n", JSON.stringify(req.body, null, 2));
+
   try {
     const result = await fsm.processInput(sessionId, intent, parameters);
 
-    // La respuesta debe incluir:
-    // - El siguiente estado (o el actual si no cambió)
-    // - Los parámetros que se deben recoger en el nuevo estado
-    // - Las APIs que deben ser llamadas por el proceso que recibe esta información
-
-    res.json({
+    const responseObject = {
       sessionId: sessionId,
-      currentStateId: result.sessionData.currentStateId, // El estado después del procesamiento
-      nextStateId: result.nextStateId, // Alias para claridad, es el mismo que currentStateId en sessionData
+      currentStateId: result.sessionData.currentStateId,
+      nextStateId: result.nextStateId,
       parametersToCollect: result.parametersToCollect,
-      payloadResponse: result.payloadResponse, // Usar la nueva estructura payloadResponse
-      collectedParameters: result.sessionData.parameters, // Todos los parámetros acumulados (ya fusionados en fsm.js)
-      // Opcional: podrías devolver más detalles del estado si es útil para el cliente
-      // nextStateDescription: result.nextStateConfig.description
-    });
+      payloadResponse: result.payloadResponse,
+      collectedParameters: result.sessionData.parameters,
+    };
+
+    console.log("API Response Body:\n", JSON.stringify(responseObject, null, 2));
+    res.json(responseObject);
 
   } catch (error) {
     console.error(`Error procesando FSM para session ${sessionId}:`, error);

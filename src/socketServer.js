@@ -34,11 +34,14 @@ function startSocketServer(socketPath, fsmProcessInputCallback) {
 
     socket.on('data', async (data) => {
       const message = data.toString();
-      console.log('Socket Server: Datos recibidos:', message);
+      // No imprimir 'message' directamente aquí si va a ser parseado y luego impreso formateado.
+      // console.log('Socket Server: Datos recibidos (raw):', message);
 
       try {
         const request = JSON.parse(message);
         RsessionId = request.sessionId; // Guardar para logging
+        console.log("Socket Request JSON:\n", JSON.stringify(request, null, 2));
+
 
         if (!request.sessionId) {
           throw new Error('sessionId es requerido en la solicitud del socket.');
@@ -49,13 +52,15 @@ function startSocketServer(socketPath, fsmProcessInputCallback) {
           request.intent,
           request.parameters
         );
+        console.log("Socket Response JSON:\n", JSON.stringify(fsmResponse, null, 2));
         socket.write(JSON.stringify(fsmResponse) + '\n'); // Añadir newline como delimitador simple
       } catch (error) {
-        console.error(`Socket Server: Error procesando mensaje para sessionId ${RsessionId || 'desconocido'}:`, error.message);
+        console.error(`Socket Server: Error procesando mensaje para sessionId ${RsessionId || 'desconocido'} (mensaje original: ${message.substring(0,100)}...):`, error.message);
         const errorResponse = {
           error: error.message,
-          details: error.stack, // Podrías querer omitir stack en producción
+          // details: error.stack, // Omitir stack en producción o hacerlo condicional
         };
+        console.log("Socket Error Response JSON:\n", JSON.stringify(errorResponse, null, 2));
         try {
           socket.write(JSON.stringify(errorResponse) + '\n');
         } catch (writeError) {

@@ -64,6 +64,7 @@ A continuación, se detalla cada componente principal:
              - `intent`: (string, opcional) La transición se activa si la `intent` (intención) proporcionada en la solicitud a la FSM coincide exactamente con este valor. Las transiciones basadas en `intent` tienen prioridad sobre las basadas solo en parámetros.
              - `allParametersMet`: (boolean, opcional) Si es `true` (y no hay una `intent` que coincida primero), esta transición se considera si todos los parámetros definidos en la sección `parameters.required` del estado *actual* han sido recolectados (es decir, existen en `collectedParameters` y no son nulos o vacíos). Si `allParametersMet` es `false` y no hay `intent`, la transición se podría activar incondicionalmente (si es la primera en la lista) o bajo otras lógicas futuras. Por defecto, si una condición solo involucra parámetros, se asume `allParametersMet: true`.
          - `defaultNextState`: (string, opcional) Si ninguna de las `transitions` listadas se cumple (es decir, ninguna `intent` coincide y/o los parámetros requeridos para las transiciones condicionales no están completos), pero sí se han recolectado todos los parámetros definidos en `parameters.required` del estado *actual*, la FSM transitará a este `defaultNextState`. Esto es útil para flujos lineales donde, después de recolectar datos, se pasa al siguiente paso lógico a menos que una intención específica desvíe el flujo.
+     - **Logging**: Los logs de este archivo son cruciales para entender el flujo de la FSM y los datos que se procesan.
 
 ### 3. `src/index.js`
    - **Propósito**: Este archivo es el punto de entrada principal de la aplicación Node.js. Es responsable de inicializar y coordinar los diferentes módulos del servicio, como la carga de la configuración de estados, la conexión a Redis, y el inicio condicional del servidor API y del cliente ARI. También maneja el cierre ordenado de la aplicación.
@@ -259,10 +260,12 @@ A continuación, se detalla cada componente principal:
             - `socket.on('data', async (data) => ...)`:
               - Cuando se reciben datos, los convierte a string.
               - Intenta parsear la cadena como JSON. Se espera que el cliente envíe un objeto JSON con `sessionId`, `intent` (opcional), y `parameters` (opcional).
+              - **Logging**: Registra el JSON de solicitud parseado en formato "pretty print".
               - Valida que `request.sessionId` exista.
               - Llama a `fsmProcessInputCallback` (que es `fsm.processInput`) con los datos de la solicitud.
+              - **Logging**: Registra la respuesta JSON de la FSM (antes de enviarla) en formato "pretty print".
               - Serializa la respuesta de la FSM a JSON y la escribe de vuelta al socket (`socket.write(JSON.stringify(response) + '\\n')`). Se añade un newline como delimitador simple de mensajes.
-              - **Manejo de Errores (por mensaje)**: Si hay un error al parsear o procesar, envía una respuesta JSON de error al cliente.
+              - **Manejo de Errores (por mensaje)**: Si hay un error al parsear o procesar, construye una respuesta JSON de error, la registra en "pretty print" y la envía al cliente.
             - `socket.on('end', () => ...)`: Registra cuando un cliente se desconecta.
             - `socket.on('error', (err) => ...)`: Registra errores específicos del socket de un cliente (evitando loguear `ECONNRESET` que son comunes).
          5. **Manejo de Errores del Servidor (`server.on('error', ...)`**: Registra errores del propio objeto servidor (ej: `EADDRINUSE`).
@@ -298,16 +301,19 @@ A continuación, se detalla cada componente principal:
        - **Cuerpo de la Solicitud (JSON)**: Espera un objeto con `intent` (opcional) y `parameters` (opcional, objeto).
        - **Lógica**:
          1. Extrae `sessionId` de `req.params` y `intent`, `parameters` de `req.body`.
-         2. Valida que `sessionId` esté presente; si no, responde con un error 400.
-         3. Llama a `fsm.processInput(sessionId, intent, parameters)` para que el motor FSM procese la solicitud.
-         4. Construye una respuesta JSON con los datos devueltos por `fsm.processInput()`:
+         2. **Logging**: Registra la URL de la solicitud y el cuerpo JSON de entrada (`req.body`) en formato "pretty print".
+         3. Valida que `sessionId` esté presente; si no, responde con un error 400.
+         4. Llama a `fsm.processInput(sessionId, intent, parameters)` para que el motor FSM procese la solicitud.
+         5. Construye un `responseObject` con los datos devueltos por `fsm.processInput()`:
             - `sessionId`
             - `currentStateId` (del `result.sessionData`)
             - `nextStateId` (del `result.nextStateId`)
             - `parametersToCollect` (del `result.parametersToCollect`)
             - `payloadResponse` (del `result.payloadResponse`)
             - `collectedParameters` (del `result.sessionData.parameters`, que ya contiene la fusión completa)
-         5. **Manejo de Errores**:
+         6. **Logging**: Registra el `responseObject` (JSON de salida) en formato "pretty print".
+         7. Envía `responseObject` al cliente.
+         8. **Manejo de Errores**:
             - Captura errores de `fsm.processInput()`.
             - Si el error es por configuración no encontrada o estado no existente, responde con un 404.
             - Si el error es por Redis no conectado, responde con un 503.
