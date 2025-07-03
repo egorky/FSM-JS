@@ -31,7 +31,7 @@ graph LR
         FSM[Motor FSM: fsm.js]
         CONF[Config Loader: configLoader.js]
         REDISC[Cliente Redis: redisClient.js]
-        ARIC [Cliente ARI: ariClient.js] -- Optional --> ASTERISK[Servidor Asterisk]
+        ARIC[Cliente ARI: ariClient.js] -- Optional --> ASTERISK[Servidor Asterisk]
     end
 
     subgraph Infraestructura
