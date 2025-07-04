@@ -95,19 +95,23 @@ function renderString(text, parameters) {
         }
 
         const resolvedArgs = args.map(arg => resolveArgument(arg, parameters));
-        return PREDEFINED_FUNCTIONS[functionName](...resolvedArgs);
+        const result = PREDEFINED_FUNCTIONS[functionName](...resolvedArgs);
+        return (result !== undefined && result !== null) ? String(result) : '';
       } catch (e) {
-        console.error(`TemplateProcessor: Error ejecutando función '${functionName}' con args '${argsString}':`, e);
-        return `[ERROR: Ejecutando ${functionName}]`;
+        console.error(`TemplateProcessor: Error ejecutando función '${functionName}' con args '${argsString}':`, e.message);
+        return `[ERROR: ${functionName} - ${e.message}]`;
       }
     }
+    // Si la función no es conocida pero el patrón {{func(...)} existe, devolvemos el match original para no romper el string
+    // o un string de error más específico. Por ahora, devolvemos un error indicativo.
     return `[ERROR: Función desconocida '${functionName}']`;
   });
 
   // 3. Reemplazar placeholders de parámetros {{paramName}}
-  processedText = processedText.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (match, paramName) => {
+  // Este regex es más simple y solo captura identificadores válidos.
+  processedText = processedText.replace(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g, (match, paramName) => {
     if (parameters.hasOwnProperty(paramName) && parameters[paramName] !== null && parameters[paramName] !== undefined) {
-      return parameters[paramName];
+      return String(parameters[paramName]); // Asegurar que sea string
     }
     return ''; // Parámetro no encontrado o es null/undefined
   });
