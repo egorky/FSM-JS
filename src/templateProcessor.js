@@ -6,8 +6,8 @@
  * @returns {*} El valor resuelto.
  */
 function resolveArgument(arg, parameters) {
-  console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument received - arg: [${arg}] (type: ${typeof arg})`);
-  console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument parameters context: ${JSON.stringify(parameters)}`);
+  // console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument received - arg: [${arg}] (type: ${typeof arg})`); // Eliminado
+  // console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument parameters context: ${JSON.stringify(parameters)}`); // Eliminado
   if (typeof arg === 'string') {
     // Es un literal string si está entre comillas (simples o dobles)
     if ((arg.startsWith("'") && arg.endsWith("'")) || (arg.startsWith('"') && arg.endsWith('"'))) {
@@ -22,25 +22,25 @@ function resolveArgument(arg, parameters) {
 
 const PREDEFINED_FUNCTIONS = {
   default: (value, defaultValue) => {
-    console.log(`TEMPLATE_PROCESSOR_DEBUG: default received - value: [${value}] (type: ${typeof value}), defaultValue: [${defaultValue}]`);
+    // console.log(`TEMPLATE_PROCESSOR_DEBUG: default received - value: [${value}] (type: ${typeof value}), defaultValue: [${defaultValue}]`); // Eliminado
     return (value !== null && value !== undefined && value !== '') ? value : defaultValue;
   },
   toUpperCase: (str) => {
-    console.log(`TEMPLATE_PROCESSOR_DEBUG: toUpperCase received - str: [${str}] (type: ${typeof str})`);
+    // console.log(`TEMPLATE_PROCESSOR_DEBUG: toUpperCase received - str: [${str}] (type: ${typeof str})`); // Eliminado
     return (str !== null && str !== undefined) ? String(str).toUpperCase() : '';
   },
   toLowerCase: (str) => {
-    console.log(`TEMPLATE_PROCESSOR_DEBUG: toLowerCase received - str: [${str}] (type: ${typeof str})`);
+    // console.log(`TEMPLATE_PROCESSOR_DEBUG: toLowerCase received - str: [${str}] (type: ${typeof str})`); // Eliminado
     return (str !== null && str !== undefined) ? String(str).toLowerCase() : '';
   },
   capitalize: (str) => {
-    console.log(`TEMPLATE_PROCESSOR_DEBUG: capitalize received - str: [${str}] (type: ${typeof str})`);
+    // console.log(`TEMPLATE_PROCESSOR_DEBUG: capitalize received - str: [${str}] (type: ${typeof str})`); // Eliminado
     if (str === null || str === undefined || str === '') return '';
     const s = String(str);
     return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
   },
   formatNumber: (num, decimalPlaces = 2) => {
-    console.log(`TEMPLATE_PROCESSOR_DEBUG: formatNumber received - num: [${num}], decimalPlaces: [${decimalPlaces}]`);
+    // console.log(`TEMPLATE_PROCESSOR_DEBUG: formatNumber received - num: [${num}], decimalPlaces: [${decimalPlaces}]`); // Eliminado
     const n = parseFloat(num);
     if (isNaN(n)) return '[ERROR: formatNumber espera un número]';
     const dp = parseInt(decimalPlaces, 10);
@@ -91,7 +91,7 @@ function renderString(text, parameters) {
       try {
         const args = [];
         if (argsString.trim() !== '') {
-          console.log(`TEMPLATE_PROCESSOR_DEBUG: Parsing function args for ${functionName} from string: "${argsString}"`);
+          // console.log(`TEMPLATE_PROCESSOR_DEBUG: Parsing function args for ${functionName} from string: "${argsString}"`); // Eliminado
           // Regex para parsear argumentos:
           // - Parámetros (identificadores)
           // - Strings literales (entre comillas simples o dobles)

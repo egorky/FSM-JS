@@ -49,9 +49,10 @@ El proyecto está organizado de la siguiente manera:
 *   **Variables de Entorno**:
     *   El proyecto ahora utiliza la librería `dotenv` para cargar automáticamente las variables de entorno desde un archivo `.env` ubicado en la raíz del proyecto.
     *   Se proporciona un archivo `.env.example` como plantilla. Los desarrolladores deben copiar este archivo a `.env` y ajustar los valores para su entorno local. `dotenv` ha sido añadido como una dependencia en `package.json`.
-    *   Variables clave incluyen `ENABLE_API`, `ENABLE_ARI`, `ENABLE_SOCKET_SERVER`, `FSM_SOCKET_PATH` y `REDIS_SESSION_TTL`.
+    *   Variables clave incluyen `ENABLE_API`, `ENABLE_ARI`, `ENABLE_SOCKET_SERVER`, `FSM_SOCKET_PATH`, `REDIS_SESSION_TTL`, y `DEFAULT_INTENT`.
     *   Otras variables configuran la conexión a Redis (`REDIS_HOST`, `REDIS_PORT`, etc.) y Asterisk ARI (`ARI_URL`, `ARI_APP_NAME`, etc.).
     *   Consulta `.env.example` para la lista completa. `src/index.js` carga estas variables al inicio.
+*   **Intención por Defecto**: Si no se provee una `intent` en la solicitud a la FSM y la variable de entorno `DEFAULT_INTENT` está configurada, la FSM usará ese valor como la intención para la evaluación de transiciones.
 *   **Interfaces de Comunicación**: La FSM puede ser contactada vía API HTTP, socket UNIX (si está habilitado y configurado), o indirectamente a través de ARI.
 *   **Manejo de Sesiones**: Las sesiones de la FSM se identifican por un `sessionId` y se persisten en Redis, con un TTL configurable mediante `REDIS_SESSION_TTL`. El `sessionId` es proporcionado en la URL para la API, como parte del mensaje JSON para sockets, y es el ID del canal para ARI.
 *   **Documentación Detallada del Código**: Para una comprensión profunda de cada módulo, incluyendo `src/socketServer.js`, consulta [docs/CodebaseOverview.md](docs/CodebaseOverview.md).

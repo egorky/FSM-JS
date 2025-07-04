@@ -52,27 +52,28 @@ async function processInput(sessionId, intent, inputParameters = {}) {
   let sessionData = await initializeOrRestoreSession(sessionId);
   let currentStateId = sessionData.currentStateId;
 
-  console.log("FSM DEBUG: Initial sessionData.parameters:\n", JSON.stringify(sessionData.parameters, null, 2));
-  console.log("FSM DEBUG: inputParameters:\n", JSON.stringify(inputParameters, null, 2));
+  // Handle DEFAULT_INTENT
+  let effectiveIntent = intent;
+  if (!effectiveIntent && process.env.DEFAULT_INTENT) {
+    effectiveIntent = process.env.DEFAULT_INTENT;
+    console.log(`FSM Info: No intent provided for session [${sessionId}]. Using DEFAULT_INTENT: [${effectiveIntent}]`);
+  }
 
   let currentParameters = { ...sessionData.parameters, ...inputParameters }; // Merge con nuevos parámetros
-  console.log("FSM DEBUG: currentParameters (merged):\n", JSON.stringify(currentParameters, null, 2));
 
   const currentStateConfig = getStateById(currentStateId);
   if (!currentStateConfig) {
     throw new Error(`Configuración no encontrada para el estado: ${currentStateId}`);
-  }
-  if (currentStateConfig.parameters?.required) {
-    console.log("FSM DEBUG: currentStateConfig required parameters:\n", JSON.stringify(currentStateConfig.parameters.required, null, 2));
   }
 
   let nextStateId = null;
   let matchedTransition = false;
 
   // 1. Evaluar transiciones basadas en intención (tienen prioridad)
-  if (intent && currentStateConfig.transitions && currentStateConfig.transitions.length > 0) {
+  // Usar effectiveIntent en lugar de intent
+  if (effectiveIntent && currentStateConfig.transitions && currentStateConfig.transitions.length > 0) {
     for (const transition of currentStateConfig.transitions) {
-      if (transition.condition && transition.condition.intent === intent) {
+      if (transition.condition && transition.condition.intent === effectiveIntent) {
         // Aquí podríamos añadir lógica más compleja para la condición de intención si fuera necesario
         // Por ejemplo, si la condición también depende de ciertos parámetros + la intención.
         // Por ahora, si la intención coincide, se transita.
@@ -87,19 +88,21 @@ async function processInput(sessionId, intent, inputParameters = {}) {
   if (!matchedTransition && currentStateConfig.transitions && currentStateConfig.transitions.length > 0) {
     for (const transition of currentStateConfig.transitions) {
       if (transition.condition) {
-        if (typeof transition.condition.allParametersMet === 'undefined' || transition.condition.allParametersMet) {
-          const requiredParams = currentStateConfig.parameters?.required || [];
-          const allRequiredMet = requiredParams.every(param => currentParameters.hasOwnProperty(param) && currentParameters[param] !== null && currentParameters[param] !== '');
-          if (allRequiredMet) {
-            nextStateId = transition.nextState;
-            matchedTransition = true;
-            break;
+        // Asegurarse de que esta condición no sea solo por intención si ya hemos manejado effectiveIntent
+        if (!transition.condition.intent) {
+          if (typeof transition.condition.allParametersMet === 'undefined' || transition.condition.allParametersMet) {
+            const requiredParams = currentStateConfig.parameters?.required || [];
+            const allRequiredMet = requiredParams.every(param => currentParameters.hasOwnProperty(param) && currentParameters[param] !== null && currentParameters[param] !== '');
+            if (allRequiredMet) {
+              nextStateId = transition.nextState;
+              matchedTransition = true;
+              break;
+            }
+          } else if (transition.condition.allParametersMet === false) { // No allParametersMet y sin intent
+              nextStateId = transition.nextState;
+              matchedTransition = true;
+              break;
           }
-        } else if (transition.condition.allParametersMet === false && !transition.condition.intent) {
-            // Transición explícita que no requiere todos los parámetros y no es por intención (caso raro, pero posible)
-            nextStateId = transition.nextState;
-            matchedTransition = true;
-            break;
         }
       }
     }
@@ -120,13 +123,16 @@ async function processInput(sessionId, intent, inputParameters = {}) {
   }
 
   // Actualizar sesión
+  if (currentStateId !== nextStateId) {
+    console.log(`FSM Info: Session [${sessionId}] transitioning from state [${currentStateId}] to [${nextStateId}]`);
+  }
   sessionData.currentStateId = nextStateId;
   sessionData.parameters = currentParameters; // Guardar todos los parámetros acumulados
   if (nextStateId !== currentStateId) {
     sessionData.history.push(nextStateId);
   }
 
-  console.log("FSM DEBUG: sessionData.parameters before saving to Redis:\n", JSON.stringify(sessionData.parameters, null, 2));
+  // console.log("FSM DEBUG: sessionData.parameters before saving to Redis:\n", JSON.stringify(sessionData.parameters, null, 2)); // Eliminado
   const sessionTTL = parseInt(process.env.REDIS_SESSION_TTL, 10);
   if (sessionTTL && sessionTTL > 0) {
     await redisClient.set(sessionKey, JSON.stringify(sessionData), 'EX', sessionTTL);
@@ -161,7 +167,7 @@ async function processInput(sessionId, intent, inputParameters = {}) {
 
   let renderedPayloadResponse = {};
   if (nextStateConfig.payloadResponse) {
-    console.log("FSM DEBUG: Parameters passed to templateProcessor:\n", JSON.stringify(currentParameters, null, 2));
+    // console.log("FSM DEBUG: Parameters passed to templateProcessor:\n", JSON.stringify(currentParameters, null, 2)); // Eliminado
     try {
       renderedPayloadResponse = processTemplate(nextStateConfig.payloadResponse, currentParameters);
     } catch (templateError) {
@@ -172,8 +178,8 @@ async function processInput(sessionId, intent, inputParameters = {}) {
     }
   }
 
-  console.log("FSM DEBUG: Final sessionData.parameters in returned object:\n", JSON.stringify(sessionData.parameters, null, 2));
-  console.log("FSM DEBUG: Final parametersToCollect:\n", JSON.stringify(parametersToCollect, null, 2));
+  // console.log("FSM DEBUG: Final sessionData.parameters in returned object:\n", JSON.stringify(sessionData.parameters, null, 2)); // Eliminado
+  // console.log("FSM DEBUG: Final parametersToCollect:\n", JSON.stringify(parametersToCollect, null, 2)); // Eliminado
 
   return {
     nextStateId: nextStateId,

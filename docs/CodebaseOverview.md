@@ -78,8 +78,9 @@ A continuación, se detalla cada componente principal:
        - Llama a `redisClient.connect()` para establecer la conexión con Redis.
        - Verifica `process.env.ENABLE_API`: Si no es `"false"`, llama a `startApiServer()` para iniciar el servidor Express. Informa si el módulo API está deshabilitado.
        - Verifica `process.env.ENABLE_ARI`: Si no es `"false"`, llama a `connectAri()` para iniciar la conexión con Asterisk ARI. Informa si el módulo ARI está deshabilitado.
-       - Registra un mensaje indicando si la aplicación se inició correctamente (con al menos un módulo activo) o una advertencia si ambos módulos principales están deshabilitados.
-       - Captura errores fatales durante la inicialización, intenta cerrar las conexiones abiertas (ARI, Redis) y termina el proceso.
+       - Verifica `process.env.ENABLE_SOCKET_SERVER` y `process.env.FSM_SOCKET_PATH`: Si están configurados para habilitar el servidor de sockets, lo inicia.
+       - Registra un mensaje indicando si la aplicación se inició correctamente (con al menos un módulo activo) o una advertencia si todos los módulos de interfaz están deshabilitados.
+       - Captura errores fatales durante la inicialización, intenta cerrar las conexiones abiertas (API, ARI, Socket, Redis) y termina el proceso.
      - **`shutdown(signal)` (async function)**:
        - Diseñada para manejar el cierre ordenado de la aplicación cuando se reciben señales del sistema como `SIGINT` (Ctrl+C) o `SIGTERM`.
        - Intenta cerrar la conexión ARI (si estaba habilitada) llamando a `closeAri()`.
@@ -187,10 +188,21 @@ A continuación, se detalla cada componente principal:
          - `inputParameters`: (object, opcional) Un objeto con los parámetros recolectados en la interacción actual.
        - **Lógica Detallada**:
          1. Llama a `initializeOrRestoreSession(sessionId)` para obtener los datos de la sesión actual (o inicializar una nueva).
-         2. Fusiona `inputParameters` (de la solicitud actual) con `sessionData.parameters` (los parámetros ya acumulados en la sesión). Los nuevos parámetros tienen precedencia. El resultado se almacena en `currentParameters` (este objeto `currentParameters` es el que se pasará al `templateProcessor`).
-         3. Obtiene la configuración del estado actual (`currentStateConfig`) usando `getStateById(sessionData.currentStateId)`. Si no se encuentra, lanza un error.
-         4. **Evaluación de Transiciones** (para determinar `nextStateId`):
+         2. **Manejo de Intención por Defecto**: Si la `intent` de entrada es "falsy" (undefined, null, vacía) y la variable de entorno `process.env.DEFAULT_INTENT` está definida, se utiliza el valor de `DEFAULT_INTENT` como `effectiveIntent`. Se registra un mensaje si esto ocurre.
+         3. Fusiona `inputParameters` (de la solicitud actual) con `sessionData.parameters` (los parámetros ya acumulados en la sesión). Los nuevos parámetros tienen precedencia. El resultado se almacena en `currentParameters` (este objeto `currentParameters` es el que se pasará al `templateProcessor`).
+         4. Obtiene la configuración del estado actual (`currentStateConfig`) usando `getStateById(sessionData.currentStateId)`. Si no se encuentra, lanza un error.
+         5. **Evaluación de Transiciones** (para determinar `nextStateId`, usando `effectiveIntent`):
             - Inicializa `nextStateId = null` y `matchedTransition = false`.
+            - **Prioridad 1: Transiciones por Intención**: Usa `effectiveIntent` para buscar una transición coincidente.
+            - **Prioridad 2: Transiciones por Parámetros Completos**: Si no hay transición por intención, y una transición no especifica `intent`, se evalúa si los parámetros requeridos están completos.
+            - **Prioridad 3: `defaultNextState`**: Si no hay transiciones específicas y los parámetros requeridos están completos.
+            - **Sin Cambio de Estado**: Si no se encuentra `nextStateId`.
+         6. **Log de Transición**: Si `currentStateId !== nextStateId`, se registra un mensaje `FSM Info` indicando la transición.
+         7. **Actualización de Sesión en Redis**: Actualiza `sessionData` (estado, parámetros, historial) y la guarda en Redis con el TTL configurado.
+         8. Obtiene la configuración del nuevo estado (`nextStateConfig`).
+         9. **Determinación de `parametersToCollect`** para el `nextStateConfig` basado en `currentParameters`.
+         10. **Procesamiento del `payloadResponse`**: Usa `templateProcessor.js` con `nextStateConfig.payloadResponse` y `currentParameters`.
+         11. **Construción de la Respuesta**: Devuelve el objeto con `nextStateId`, `parametersToCollect`, `payloadResponse` (procesado), y `sessionData` (con todos los parámetros fusionados).
             - **Prioridad 1: Transiciones por Intención**: Si se proporcionó una `intent` y el `currentStateConfig` tiene `transitions`, itera sobre ellas. Si una transición tiene una `condition.intent` que coincide con la `intent` de entrada, se usa el `nextState` de esa transición y `matchedTransition` se pone a `true`.
             - **Prioridad 2: Transiciones por Parámetros Completos**: Si no hubo coincidencia por intención (`!matchedTransition`) y hay `transitions`, itera sobre ellas. Para cada transición:
               - Si `transition.condition.allParametersMet` es `true` (o no está definida, asumiéndose `true`), verifica si todos los parámetros en `currentStateConfig.parameters.required` existen en `currentParameters` (y no son nulos/vacíos). Si es así, se usa el `nextState` de esa transición y `matchedTransition` se pone a `true`.

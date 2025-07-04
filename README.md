@@ -63,6 +63,7 @@ Cuando una interacción ocurre (ya sea una solicitud API o un evento en una llam
         *   `ENABLE_API`: Controla si se inicia el servidor API (`true` por defecto).
     *   `ENABLE_ARI`: Controla si se inicia la conexión ARI (`true` por defecto).
     *   `ENABLE_SOCKET_SERVER`: Controla si se inicia el servidor de sockets UNIX (`true` por defecto).
+    *   `DEFAULT_INTENT`: Intención que se asume si no se proporciona ninguna en la solicitud (ej: `intent_schedule_appointment`). Dejar vacío para no asumir ninguna.
     *   `PORT`: Puerto para el servidor API (defecto: 3000, relevante si `ENABLE_API="true"`).
     *   `FSM_SOCKET_PATH`: Ruta del archivo para el socket UNIX (defecto: `/tmp/fsm_service.sock`, relevante si `ENABLE_SOCKET_SERVER="true"`).
     *   `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`: Para la conexión a Redis.
