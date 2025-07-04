@@ -179,6 +179,8 @@
         "finalMessage": "Su cita para {{medical_specialty}} el {{appointment_date}} a las {{appointment_time}} ha sido confirmada. ¡Gracias, {{capitalize(caller_name)}}!",
         "summaryForSystem": "Cita: {{medical_specialty}}, Día: {{appointment_date}}, Hora: {{appointment_time}}, Paciente: {{patient_id_number}}, Edad: {{patient_age}}",
         "totalCost": "Costo total: {{formatNumber(cost, 2)}}",
+        "nextAppointmentRecommendation": "{{sandbox_js: const d = new Date(collectedParameters.appointment_date); d.setMonth(d.getMonth() + 6); return 'Próxima revisión sugerida: ' + d.toISOString().split('T')[0]; }}",
+        "dynamicGreetingBasedOnTime": "{{sandbox_js: const h = new Date().getHours(); if (h < 12) return 'Buenos días'; else if (h < 18) return 'Buenas tardes'; else return 'Buenas noches';}} {{caller_name}}",
         "apiHooks": {
           "onEnterState": ["api_send_confirmation_message", "api_log_interaction_complete"]
         }

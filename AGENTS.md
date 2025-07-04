@@ -7,44 +7,57 @@ Este documento proporciona una guía para trabajar con el proyecto de Máquina d
 El proyecto está organizado de la siguiente manera:
 
 -   `package.json`: Define las dependencias del proyecto y los scripts principales.
-    -   **Importante**: Las dependencias listadas (`express`, `ioredis`, `ari-client`, `dotenv`) **no se instalan automáticamente** como parte de las tareas de este agente. Se asume que estarán disponibles en el entorno de ejecución final.
+    -   **Importante**: Las dependencias listadas (`express`, `ioredis`, `ari-client`, `dotenv`, `isolated-vm`) **no se instalan automáticamente** como parte de las tareas de este agente. Se asume que estarán disponibles en el entorno de ejecución final.
 -   `config/`: Contiene los archivos de configuración.
     -   `states.json`: Define la estructura de la máquina de estados. Cada estado incluye:
         -   `id`, `description`.
         -   `parameters`: Con `required` y `optional`.
-        -   `payloadResponse`: Un objeto de formato libre. **Los strings dentro de este objeto son procesados por `src/templateProcessor.js` para sustituir placeholders (`{{param}}`, `{{current_date}}`) y ejecutar funciones predefinidas (ej: `{{toUpperCase(param)}}`) antes de ser devueltos por la FSM.**
+        -   `payloadResponse`: Un objeto de formato libre. Los strings dentro de este objeto son procesados por `src/templateProcessor.js` para sustituir placeholders (`{{param}}`, `{{current_date}}`), ejecutar funciones predefinidas (ej: `{{toUpperCase(param)}}`), y **opcionalmente ejecutar JavaScript en sandbox (`{{sandbox_js: ... }}`)** antes de ser devueltos por la FSM.
         -   `transitions`: Para definir los siguientes estados basados en condiciones.
         -   `defaultNextState`.
 -   `src/`: Contiene el código fuente de la aplicación.
-    -   `index.js`: Punto de entrada. Carga `dotenv`, inicializa módulos.
+    -   `index.js`: Punto de entrada. Carga `dotenv`, inicializa módulos (incluyendo intento de carga de `isolated-vm`).
     -   `configLoader.js`: Carga y valida `states.json`.
-    -   `fsm.js`: Lógica central de la FSM. **Importante: Ahora procesa el `payloadResponse` usando `templateProcessor.js` antes de devolverlo.**
+    -   `fsm.js`: Lógica central de la FSM. Procesa el `payloadResponse` usando `templateProcessor.js`.
     -   `redisClient.js`: Cliente Redis.
     -   `apiServer.js`: Servidor API Express.
     -   `ariClient.js`: Cliente Asterisk ARI.
-    -   `templateProcessor.js`: **Nuevo módulo** responsable de procesar strings en `payloadResponse` para sustituir placeholders y ejecutar funciones predefinidas.
+    -   `templateProcessor.js`: **Módulo clave** responsable de procesar strings en `payloadResponse` (placeholders, funciones predefinidas, y opcionalmente `sandbox_js` con `isolated-vm` si está cargado).
 
 ## Flujo General de la Aplicación
 
-1.  **Inicio (`src/index.js`)**: Similar a antes.
+1.  **Inicio (`src/index.js`)**: Similar a antes, con la advertencia de que `isolated-vm` podría no cargarse si hay problemas de compilación o instalación.
 
 2.  **Interacción (Modo API / Socket / ARI)**:
     *   La solicitud llega a `fsm.js`.
     *   `fsm.js` determina el `nextStateId` y obtiene el `payloadResponse` crudo del `config/states.json`.
-    *   **Nuevo Paso de Procesamiento**: `fsm.js` pasa el `payloadResponse` crudo y los `collectedParameters` a `templateProcessor.js`.
-    *   `templateProcessor.js` devuelve el `payloadResponse` con todos los placeholders y funciones resueltos.
-    *   `fsm.js` devuelve este `payloadResponse` procesado, junto con `nextStateId`, `parametersToCollect`, y `collectedParameters`.
+    *   **Paso de Procesamiento**: `fsm.js` pasa el `payloadResponse` crudo y los `collectedParameters` a `templateProcessor.js`.
+    *   `templateProcessor.js` procesa el `payloadResponse`:
+        *   Sustituye `{{current_date}}`, `{{current_time}}`, `{{current_datetime}}`.
+        *   Si `isolated-vm` está disponible, ejecuta cualquier código en `{{sandbox_js: ... }}`.
+        *   Ejecuta funciones predefinidas `{{funcName(...)}}`.
+        *   Sustituye placeholders de parámetros `{{paramName}}`.
+    *   `fsm.js` devuelve el `payloadResponse` ya procesado/renderizado.
     *   `apiServer.js` (o `socketServer.js` o `ariClient.js`) envía esta respuesta procesada al cliente.
 
 ## Consideraciones para el Desarrollo
 
 *   **Procesamiento de Plantillas (`payloadResponse`)**:
     *   Los strings dentro de `payloadResponse` en `config/states.json` ahora son dinámicos.
-    *   Sintaxis: `{{paramName}}` para parámetros, `{{current_date}}`, `{{current_time}}`, `{{current_datetime}}` para fecha/hora.
-    *   Funciones predefinidas: `{{funcName(arg1, 'literal', ...)}}`. Consulta `src/templateProcessor.js` para la lista de funciones (`default`, `toUpperCase`, `toLowerCase`, `capitalize`, `formatNumber`, `add`, `subtract`).
-    *   Este procesamiento ocurre dentro de `fsm.js` a través de `templateProcessor.js`. La aplicación cliente recibe el `payloadResponse` ya renderizado.
+    *   **Sintaxis Soportada**:
+        *   Parámetros: `{{paramName}}`.
+        *   Fecha/Hora: `{{current_date}}`, `{{current_time}}`, `{{current_datetime}}`.
+        *   Funciones Predefinidas: `{{funcName(arg1, 'literal', ...)}}`. Ver `PREDEFINED_FUNCTIONS` en `templateProcessor.js` para la lista actual.
+        *   JavaScript en Sandbox: `{{sandbox_js: /* código JS */ }}`. Este código tiene acceso a una variable `collectedParameters`. Solo funciona si `isolated-vm` está cargado.
+    *   **Orden de Procesamiento**: Fecha/Hora -> `sandbox_js` -> Funciones Predefinidas -> Parámetros Simples.
+    *   Este procesamiento ocurre dentro de `fsm.js` vía `templateProcessor.js`. El cliente recibe el `payloadResponse` ya renderizado.
+*   **JavaScript en Sandbox (`isolated-vm`)**:
+    *   La dependencia `isolated-vm` se ha añadido a `package.json`. Recuerda que este agente no la instalará.
+    *   `templateProcessor.js` intenta cargar `isolated-vm`. Si falla, la funcionalidad `{{sandbox_js:...}}` se deshabilita y se emite una advertencia.
+    *   El código en `sandbox_js` se ejecuta con límites de memoria y tiempo.
+    *   Considera la seguridad y el rendimiento al usar esta característica.
 *   **Parámetros Acumulados**: Se mantiene igual: `collectedParameters` siempre contiene la fusión completa.
-*   **No Instalar Dependencias**: Se mantiene (excepto `dotenv`).
+*   **No Instalar Dependencias**: Se mantiene (excepto `dotenv` e `isolated-vm` que ahora están registradas).
 *   **Pruebas**: Se mantiene.
 *   **Variables de Entorno**:
     *   El proyecto ahora utiliza la librería `dotenv` para cargar automáticamente las variables de entorno desde un archivo `.env` ubicado en la raíz del proyecto.

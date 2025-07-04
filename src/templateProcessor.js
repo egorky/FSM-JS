@@ -9,38 +9,30 @@ function resolveArgument(arg, parameters) {
   // console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument received - arg: [${arg}] (type: ${typeof arg})`); // Eliminado
   // console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument parameters context: ${JSON.stringify(parameters)}`); // Eliminado
   if (typeof arg === 'string') {
-    // Es un literal string si está entre comillas (simples o dobles)
     if ((arg.startsWith("'") && arg.endsWith("'")) || (arg.startsWith('"') && arg.endsWith('"'))) {
       return arg.substring(1, arg.length - 1);
     }
-    // Si no, es una referencia a un parámetro
     return parameters.hasOwnProperty(arg) ? parameters[arg] : undefined;
   }
-  // Si es número o booleano, se devuelve tal cual
   return arg;
 }
 
 const PREDEFINED_FUNCTIONS = {
   default: (value, defaultValue) => {
-    // console.log(`TEMPLATE_PROCESSOR_DEBUG: default received - value: [${value}] (type: ${typeof value}), defaultValue: [${defaultValue}]`); // Eliminado
     return (value !== null && value !== undefined && value !== '') ? value : defaultValue;
   },
   toUpperCase: (str) => {
-    // console.log(`TEMPLATE_PROCESSOR_DEBUG: toUpperCase received - str: [${str}] (type: ${typeof str})`); // Eliminado
     return (str !== null && str !== undefined) ? String(str).toUpperCase() : '';
   },
   toLowerCase: (str) => {
-    // console.log(`TEMPLATE_PROCESSOR_DEBUG: toLowerCase received - str: [${str}] (type: ${typeof str})`); // Eliminado
     return (str !== null && str !== undefined) ? String(str).toLowerCase() : '';
   },
   capitalize: (str) => {
-    // console.log(`TEMPLATE_PROCESSOR_DEBUG: capitalize received - str: [${str}] (type: ${typeof str})`); // Eliminado
     if (str === null || str === undefined || str === '') return '';
     const s = String(str);
     return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
   },
   formatNumber: (num, decimalPlaces = 2) => {
-    // console.log(`TEMPLATE_PROCESSOR_DEBUG: formatNumber received - num: [${num}], decimalPlaces: [${decimalPlaces}]`); // Eliminado
     const n = parseFloat(num);
     if (isNaN(n)) return '[ERROR: formatNumber espera un número]';
     const dp = parseInt(decimalPlaces, 10);
@@ -60,6 +52,16 @@ const PREDEFINED_FUNCTIONS = {
     return n1 - n2;
   },
 };
+
+// Intento de importar isolated-vm.
+let ivm;
+try {
+  ivm = require('isolated-vm');
+  console.log("TemplateProcessor: 'isolated-vm' cargado exitosamente. Funcionalidad {{sandbox_js:...}} estará habilitada.");
+} catch (e) {
+  console.warn("TemplateProcessor: No se pudo cargar 'isolated-vm'. La funcionalidad {{sandbox_js:...}} estará deshabilitada. Error:", e.message);
+  ivm = null;
+}
 
 /**
  * Procesa un string de plantilla, reemplazando placeholders y ejecutando funciones.
@@ -85,26 +87,57 @@ function renderString(text, parameters) {
   processedText = processedText.replace(/\{\{current_time\}\}/g, `${hours}:${minutes}:${seconds}`);
   processedText = processedText.replace(/\{\{current_datetime\}\}/g, `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`);
 
-  // 2. Reemplazar placeholders de funciones {{functionName(arg1, 'literal', arg3)}}
+  // 2. Procesar {{sandbox_js: ... }} si ivm está disponible
+  if (ivm) {
+    processedText = processedText.replace(/\{\{sandbox_js:\s*([\s\S]+?)\s*\}\}/g, (match, jsCode) => {
+      let isolate;
+      let context;
+      try {
+        // Crear una copia profunda y plana de parameters para el sandbox
+        // Esto evita problemas con objetos complejos y funciones en ExternalCopy
+        const safeParameters = JSON.parse(JSON.stringify(parameters));
+
+        isolate = new ivm.Isolate({ memoryLimit: 16 }); // Límite de memoria de 16MB
+        context = isolate.createContextSync();
+        const jail = context.global;
+
+        jail.setSync('collectedParameters', new ivm.ExternalCopy(safeParameters).copyInto());
+
+        // Para permitir que el script devuelva un valor, podemos envolverlo.
+        // O confiar en que la última expresión evaluada es el resultado.
+        // Por ahora, confiamos en la última expresión o un return explícito.
+        const script = isolate.compileScriptSync(jsCode);
+        const result = script.runSync(context, { timeout: 100 }); // Timeout de 100ms
+
+        return (result !== undefined && result !== null) ? String(result) : '';
+      } catch (e) {
+        console.error(`TemplateProcessor: Error ejecutando sandbox_js: "${jsCode.substring(0, 70)}..."`, e.message);
+        return `[JS_SANDBOX_ERROR: ${e.message.substring(0, 100)}]`;
+      } finally {
+        if (context) {
+          try { context.release(); } catch (e) { /* ignore */ }
+        }
+        if (isolate) {
+          try { isolate.dispose(); } catch (e) { /* ignore */ }
+        }
+      }
+    });
+  }
+
+  // 3. Reemplazar placeholders de funciones predefinidas {{functionName(arg1, 'literal', arg3)}}
   processedText = processedText.replace(/\{\{([a-zA-Z0-9_]+)\(([^)]*)\)\}\}/g, (match, functionName, argsString) => {
     if (PREDEFINED_FUNCTIONS.hasOwnProperty(functionName)) {
       try {
         const args = [];
         if (argsString.trim() !== '') {
-          // console.log(`TEMPLATE_PROCESSOR_DEBUG: Parsing function args for ${functionName} from string: "${argsString}"`); // Eliminado
-          // Regex para parsear argumentos:
-          // - Parámetros (identificadores)
-          // - Strings literales (entre comillas simples o dobles)
-          // - Números (enteros o decimales)
-          // - Booleanos (true/false)
           const argRegex = /(?:([a-zA-Z_][a-zA-Z0-9_]*)|"([^"]*)"|'([^']*)'|([0-9]+\.?[0-9]*)|(true|false))/g;
           let argMatch;
           while((argMatch = argRegex.exec(argsString)) !== null) {
-            if (argMatch[1] !== undefined) args.push(argMatch[1]); // Parámetro
-            else if (argMatch[2] !== undefined) args.push(`"${argMatch[2]}"`); // String literal (dobles)
-            else if (argMatch[3] !== undefined) args.push(`'${argMatch[3]}'`); // String literal (simples)
-            else if (argMatch[4] !== undefined) args.push(parseFloat(argMatch[4])); // Número
-            else if (argMatch[5] !== undefined) args.push(argMatch[5].toLowerCase() === 'true'); // Booleano
+            if (argMatch[1] !== undefined) args.push(argMatch[1]);
+            else if (argMatch[2] !== undefined) args.push(`"${argMatch[2]}"`);
+            else if (argMatch[3] !== undefined) args.push(`'${argMatch[3]}'`);
+            else if (argMatch[4] !== undefined) args.push(parseFloat(argMatch[4]));
+            else if (argMatch[5] !== undefined) args.push(argMatch[5].toLowerCase() === 'true');
           }
         }
 
@@ -116,18 +149,15 @@ function renderString(text, parameters) {
         return `[ERROR: ${functionName} - ${e.message}]`;
       }
     }
-    // Si la función no es conocida pero el patrón {{func(...)} existe, devolvemos el match original para no romper el string
-    // o un string de error más específico. Por ahora, devolvemos un error indicativo.
     return `[ERROR: Función desconocida '${functionName}']`;
   });
 
-  // 3. Reemplazar placeholders de parámetros {{paramName}}
-  // Este regex es más simple y solo captura identificadores válidos.
+  // 4. Reemplazar placeholders de parámetros {{paramName}} (último, para no interferir con argumentos de funciones)
   processedText = processedText.replace(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g, (match, paramName) => {
     if (parameters.hasOwnProperty(paramName) && parameters[paramName] !== null && parameters[paramName] !== undefined) {
-      return String(parameters[paramName]); // Asegurar que sea string
+      return String(parameters[paramName]);
     }
-    return ''; // Parámetro no encontrado o es null/undefined
+    return '';
   });
 
   return processedText;
@@ -155,7 +185,6 @@ function processTemplate(template, parameters) {
     }
     return result;
   }
-  // Devolver otros tipos de datos (números, booleanos, null) tal cual
   return template;
 }
 
