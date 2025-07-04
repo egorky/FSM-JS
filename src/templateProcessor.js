@@ -6,6 +6,8 @@
  * @returns {*} El valor resuelto.
  */
 function resolveArgument(arg, parameters) {
+  console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument received - arg: [${arg}] (type: ${typeof arg})`);
+  console.log(`TEMPLATE_PROCESSOR_DEBUG: resolveArgument parameters context: ${JSON.stringify(parameters)}`);
   if (typeof arg === 'string') {
     // Es un literal string si está entre comillas (simples o dobles)
     if ((arg.startsWith("'") && arg.endsWith("'")) || (arg.startsWith('"') && arg.endsWith('"'))) {
@@ -19,15 +21,26 @@ function resolveArgument(arg, parameters) {
 }
 
 const PREDEFINED_FUNCTIONS = {
-  default: (value, defaultValue) => (value !== null && value !== undefined && value !== '') ? value : defaultValue,
-  toUpperCase: (str) => (str !== null && str !== undefined) ? String(str).toUpperCase() : '',
-  toLowerCase: (str) => (str !== null && str !== undefined) ? String(str).toLowerCase() : '',
+  default: (value, defaultValue) => {
+    console.log(`TEMPLATE_PROCESSOR_DEBUG: default received - value: [${value}] (type: ${typeof value}), defaultValue: [${defaultValue}]`);
+    return (value !== null && value !== undefined && value !== '') ? value : defaultValue;
+  },
+  toUpperCase: (str) => {
+    console.log(`TEMPLATE_PROCESSOR_DEBUG: toUpperCase received - str: [${str}] (type: ${typeof str})`);
+    return (str !== null && str !== undefined) ? String(str).toUpperCase() : '';
+  },
+  toLowerCase: (str) => {
+    console.log(`TEMPLATE_PROCESSOR_DEBUG: toLowerCase received - str: [${str}] (type: ${typeof str})`);
+    return (str !== null && str !== undefined) ? String(str).toLowerCase() : '';
+  },
   capitalize: (str) => {
+    console.log(`TEMPLATE_PROCESSOR_DEBUG: capitalize received - str: [${str}] (type: ${typeof str})`);
     if (str === null || str === undefined || str === '') return '';
     const s = String(str);
     return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
   },
   formatNumber: (num, decimalPlaces = 2) => {
+    console.log(`TEMPLATE_PROCESSOR_DEBUG: formatNumber received - num: [${num}], decimalPlaces: [${decimalPlaces}]`);
     const n = parseFloat(num);
     if (isNaN(n)) return '[ERROR: formatNumber espera un número]';
     const dp = parseInt(decimalPlaces, 10);
@@ -78,6 +91,7 @@ function renderString(text, parameters) {
       try {
         const args = [];
         if (argsString.trim() !== '') {
+          console.log(`TEMPLATE_PROCESSOR_DEBUG: Parsing function args for ${functionName} from string: "${argsString}"`);
           // Regex para parsear argumentos:
           // - Parámetros (identificadores)
           // - Strings literales (entre comillas simples o dobles)
